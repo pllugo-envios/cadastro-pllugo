@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · Pllugo</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #E8192C;
+    --red-light: #FFF0F1;
+    --dark: #111827;
+    --mid: #6B7280;
+    --border: #E5E7EB;
+    --light: #F9FAFB;
+    --white: #FFFFFF;
+    --green: #059669;
+    --green-light: #D1FAE5;
+    --yellow: #D97706;
+    --yellow-light: #FEF3C7;
+    --blue: #2563EB;
+    --blue-light: #EFF6FF;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: #F3F4F6;
+    color: var(--dark);
+    min-height: 100vh;
+  }
+
+  /* LOGIN */
+  .login-screen {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: linear-gradient(135deg, #fff0f1 0%, #ffffff 60%, #f3f4f6 100%);
+  }
+
+  .login-card {
+    background: white;
+    border-radius: 20px;
+    padding: 36px 28px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.1);
+    border: 1px solid var(--border);
+  }
+
+  .login-logo {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .login-logo .logo-mark {
+    width: 52px;
+    height: 52px;
+    background: var(--red);
+    border-radius: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: white;
+    margin-bottom: 10px;
+  }
+
+  .login-logo h1 {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--red);
+    letter-spacing: -0.03em;
+  }
+
+  .login-logo p {
+    font-size: 12px;
+    color: var(--mid);
+    margin-top: 2px;
+  }
+
+  .login-field { margin-bottom: 14px; }
+
+  .login-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--dark);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .login-field input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .login-field input:focus { border-color: var(--red); }
+
+  .login-btn {
+    width: 100%;
+    padding: 14px;
+    background: var(--red);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    cursor: pointer;
+    margin-top: 6px;
+    transition: background 0.2s;
+  }
+
+  .login-btn:hover { background: #c8162a; }
+  .login-error { color: var(--red); font-size: 12px; margin-top: 8px; text-align: center; display: none; }
+
+  /* ADMIN */
+  .admin { display: none; }
+
+  /* HEADER */
+  .admin-header {
+    background: white;
+    border-bottom: 3px solid var(--red);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--red);
+    letter-spacing: -0.03em;
+  }
+
+  .header-logo .mark {
+    width: 32px;
+    height: 32px;
+    background: var(--red);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .badge-count {
+    background: var(--red-light);
+    color: var(--red);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 99px;
+    border: 1px solid #ffc0c5;
+  }
+
+  .logout-btn {
+    background: var(--light);
+    border: 1px solid var(--border);
+    color: var(--mid);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+
+  /* STATS */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    text-align: center;
+  }
+
+  .stat-num {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    color: var(--mid);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  /* FILTERS */
+  .filters {
+    padding: 0 16px 12px;
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .filter-btn {
+    padding: 7px 14px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1.5px solid var(--border);
+    background: white;
+    color: var(--mid);
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .filter-btn.active {
+    background: var(--dark);
+    color: white;
+    border-color: var(--dark);
+  }
+
+  /* LIST */
+  .cadastros-list {
+    padding: 0 16px;
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 40px;
+  }
+
+  .cadastro-card {
+    background: white;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    animation: fadeUp 0.3s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-top {
+    padding: 14px 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+  }
+
+  .card-info { flex: 1; }
+
+  .card-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--dark);
+    margin-bottom: 3px;
+  }
+
+  .card-meta {
+    font-size: 12px;
+    color: var(--mid);
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .card-meta span { display: flex; align-items: center; gap: 3px; }
+
+  .status-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 99px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  .status-Pendente { background: var(--yellow-light); color: var(--yellow); }
+  .status-Aprovado { background: var(--green-light); color: var(--green); }
+  .status-Reprovado { background: var(--red-light); color: var(--red); }
+
+  /* EXPANDED */
+  .card-detail {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 16px;
+  }
+
+  .card-detail.open { display: block; }
+
+  .detail-section {
+    margin-bottom: 16px;
+  }
+
+  .detail-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--mid);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .detail-item {
+    background: var(--light);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  .detail-item-label {
+    font-size: 10px;
+    color: var(--mid);
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .detail-item-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--dark);
+    word-break: break-all;
+  }
+
+  /* DOCS */
+  .docs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .doc-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--blue-light);
+    border: 1px solid #BFDBFE;
+    border-radius: 8px;
+    padding: 10px;
+    text-decoration: none;
+    color: var(--blue);
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .doc-link:hover { background: #DBEAFE; }
+  .doc-link .doc-icon { font-size: 16px; flex-shrink: 0; }
+
+  .doc-missing {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--light);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mid);
+  }
+
+  /* ACTIONS */
+  .action-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+  }
+
+  .action-btn {
+    flex: 1;
+    padding: 11px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .btn-aprovar {
+    background: var(--green-light);
+    color: var(--green);
+    border: 1.5px solid #6EE7B7;
+  }
+
+  .btn-aprovar:hover { background: #A7F3D0; }
+
+  .btn-reprovar {
+    background: var(--red-light);
+    color: var(--red);
+    border: 1.5px solid #FCA5A5;
+  }
+
+  .btn-reprovar:hover { background: #FECACA; }
+
+  .btn-whatsapp {
+    background: #D1FAE5;
+    color: #065F46;
+    border: 1.5px solid #6EE7B7;
+    flex: 0 0 auto;
+    padding: 11px 14px;
+  }
+
+  /* LOADING */
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--mid);
+    font-size: 14px;
+  }
+
+  .spinner {
+    width: 28px;
+    height: 28px;
+    border: 3px solid var(--border);
+    border-top-color: var(--red);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--mid);
+  }
+
+  .empty-icon { font-size: 40px; margin-bottom: 10px; }
+  .empty-title { font-size: 16px; font-weight: 700; color: var(--dark); margin-bottom: 4px; }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--dark);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: transform 0.3s ease;
+    z-index: 999;
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-mark">↗</div>
+      <h1>pllugo</h1>
+      <p>Painel Administrativo</p>
+    </div>
+    <div class="login-field">
+      <label>Senha de acesso</label>
+      <input type="password" id="senhaInput" placeholder="••••••••" onkeydown="if(event.key==='Enter') fazerLogin()">
+    </div>
+    <button class="login-btn" onclick="fazerLogin()">Entrar →</button>
+    <div class="login-error" id="loginError">Senha incorreta</div>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div class="admin" id="adminPanel">
+
+  <div class="admin-header">
+    <div class="header-logo">
+      <div class="mark">↗</div>
+      pllugo <span style="font-weight:400;color:#9CA3AF;font-size:13px;">admin</span>
+    </div>
+    <div class="header-right">
+      <span class="badge-count" id="totalCount">0 cadastros</span>
+      <button class="logout-btn" onclick="logout()">Sair</button>
+    </div>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num" id="statTotal" style="color:var(--dark)">0</div>
+      <div class="stat-label">Total</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statPendente" style="color:var(--yellow)">0</div>
+      <div class="stat-label">Pendentes</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="statAprovado" style="color:var(--green)">0</div>
+      <div class="stat-label">Aprovados</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" onclick="filtrar('todos', this)">Todos</button>
+    <button class="filter-btn" onclick="filtrar('Pendente', this)">⏳ Pendentes</button>
+    <button class="filter-btn" onclick="filtrar('Aprovado', this)">✅ Aprovados</button>
+    <button class="filter-btn" onclick="filtrar('Reprovado', this)">❌ Reprovados</button>
+  </div>
+
+  <div class="cadastros-list" id="cadastrosList">
+    <div class="loading">
+      <div class="spinner"></div>
+      Carregando cadastros...
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================================================
+// CONFIGURAÇÃO SUPABASE
+// ================================================
+const SUPABASE_URL = 'https://rxwqzookesrjaesrhmrt.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4d3F6b29rZXNyamFlc3JobXJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4ODcyNzEsImV4cCI6MjA5MjQ2MzI3MX0.0XEwOmku1xOIWwagMo2-X5qDyTg7VZMKorLpFowVPo0';
+
+// ⚠️ Mude esta senha para algo seguro
+const SENHA_ADMIN = 'pllugo2024';
+
+let todosOsCadastros = [];
+let filtroAtual = 'todos';
+
+// LOGIN
+function fazerLogin() {
+  const senha = document.getElementById('senhaInput').value;
+  if (senha === SENHA_ADMIN) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'block';
+    carregarCadastros();
+  } else {
+    document.getElementById('loginError').style.display = 'block';
+  }
+}
+
+function logout() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('adminPanel').style.display = 'none';
+  document.getElementById('senhaInput').value = '';
+}
+
+// CARREGAR DADOS
+async function carregarCadastros() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/cadastros_motoristas?select=*&order=created_at.desc`, {
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': SUPABASE_KEY
+      }
+    });
+
+    if (!res.ok) throw new Error('Erro ao carregar');
+    todosOsCadastros = await res.json();
+    atualizarStats();
+    renderizarLista(todosOsCadastros);
+  } catch (err) {
+    document.getElementById('cadastrosList').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">⚠️</div>
+        <div class="empty-title">Erro ao carregar</div>
+        <p style="font-size:13px">Verifique as permissões no Supabase</p>
+      </div>`;
+  }
+}
+
+function atualizarStats() {
+  const total = todosOsCadastros.length;
+  const pendentes = todosOsCadastros.filter(c => c.status === 'Pendente').length;
+  const aprovados = todosOsCadastros.filter(c => c.status === 'Aprovado').length;
+
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statPendente').textContent = pendentes;
+  document.getElementById('statAprovado').textContent = aprovados;
+  document.getElementById('totalCount').textContent = `${total} cadastro${total !== 1 ? 's' : ''}`;
+}
+
+function filtrar(status, btn) {
+  filtroAtual = status;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtrados = status === 'todos' ? todosOsCadastros : todosOsCadastros.filter(c => c.status === status);
+  renderizarLista(filtrados);
+}
+
+function renderizarLista(lista) {
+  const el = document.getElementById('cadastrosList');
+
+  if (lista.length === 0) {
+    el.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">📋</div>
+        <div class="empty-title">Nenhum cadastro</div>
+        <p style="font-size:13px;color:var(--mid)">Ainda não há cadastros nesta categoria</p>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = lista.map(c => criarCard(c)).join('');
+}
+
+function criarCard(c) {
+  const data = new Date(c.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+  const docs = [
+    { key: 'doc_comprovante_endereco', label: 'Comp. Endereço', icon: '📄' },
+    { key: 'doc_rg', label: 'RG', icon: '🪪' },
+    { key: 'doc_cnh', label: 'CNH', icon: '🚗' },
+    { key: 'doc_veiculo', label: 'Doc. Veículo', icon: '📋' },
+    { key: 'doc_rg_proprietario', label: 'RG Prop.', icon: '🪪' },
+    { key: 'doc_comp_proprietario', label: 'Comp. Prop.', icon: '🏠' },
+    { key: 'doc_antecedentes_federal', label: 'Ant. Federal', icon: '🏛️' },
+    { key: 'doc_antecedentes_estadual', label: 'Ant. Estadual', icon: '🏢' },
+  ];
+
+  const docsHTML = docs.map(d => c[d.key]
+    ? `<a class="doc-link" href="${c[d.key]}" target="_blank"><span class="doc-icon">${d.icon}</span>${d.label}</a>`
+    : `<div class="doc-missing"><span>❌</span>${d.label}</div>`
+  ).join('');
+
+  const tel = (c.telefone || '').replace(/\D/g, '');
+
+  return `
+  <div class="cadastro-card" id="card-${c.id}">
+    <div class="card-top" onclick="toggleCard('${c.id}')">
+      <div class="card-info">
+        <div class="card-name">${c.nome || '—'}</div>
+        <div class="card-meta">
+          <span>📱 ${c.telefone || '—'}</span>
+          <span>🚗 ${c.tipo_veiculo || '—'} · ${c.placa || '—'}</span>
+          <span>🕐 ${data}</span>
+        </div>
+      </div>
+      <span class="status-badge status-${c.status}">${c.status}</span>
+    </div>
+    <div class="card-detail" id="detail-${c.id}">
+
+      <div class="detail-section">
+        <div class="detail-title">Dados Pessoais</div>
+        <div class="detail-grid">
+          <div class="detail-item"><div class="detail-item-label">CPF</div><div class="detail-item-value">${c.cpf || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">Chave PIX</div><div class="detail-item-value">${c.chave_pix || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">E-mail</div><div class="detail-item-value">${c.email || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">Estado Civil</div><div class="detail-item-value">${c.estado_civil || '—'}</div></div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-title">Endereço & Veículo</div>
+        <div class="detail-grid">
+          <div class="detail-item" style="grid-column:span 2"><div class="detail-item-label">Endereço</div><div class="detail-item-value">${c.endereco || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">CEP</div><div class="detail-item-value">${c.cep || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">CEP Entrega</div><div class="detail-item-value">${c.cep_entrega || '—'}</div></div>
+          ${c.nome_empresa ? `<div class="detail-item"><div class="detail-item-label">Empresa</div><div class="detail-item-value">${c.nome_empresa}</div></div>` : ''}
+          ${c.cnpj ? `<div class="detail-item"><div class="detail-item-label">CNPJ</div><div class="detail-item-value">${c.cnpj}</div></div>` : ''}
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-title">Documentos</div>
+        <div class="docs-grid">${docsHTML}</div>
+      </div>
+
+      <div class="action-row">
+        <button class="action-btn btn-aprovar" onclick="atualizarStatus('${c.id}', 'Aprovado')">✅ Aprovar</button>
+        <button class="action-btn btn-reprovar" onclick="atualizarStatus('${c.id}', 'Reprovado')">❌ Reprovar</button>
+        ${tel ? `<a class="action-btn btn-whatsapp" href="https://wa.me/55${tel}" target="_blank">💬</a>` : ''}
+      </div>
+
+    </div>
+  </div>`;
+}
+
+function toggleCard(id) {
+  const detail = document.getElementById('detail-' + id);
+  detail.classList.toggle('open');
+}
+
+async function atualizarStatus(id, novoStatus) {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/cadastros_motoristas?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ status: novoStatus })
+    });
+
+    if (!res.ok) throw new Error();
+
+    // Atualiza local
+    const idx = todosOsCadastros.findIndex(c => c.id === id);
+    if (idx !== -1) todosOsCadastros[idx].status = novoStatus;
+
+    atualizarStats();
+
+    // Atualiza badge no card
+    const badge = document.querySelector(`#card-${id} .status-badge`);
+    if (badge) {
+      badge.className = `status-badge status-${novoStatus}`;
+      badge.textContent = novoStatus;
+    }
+
+    mostrarToast(novoStatus === 'Aprovado' ? '✅ Motorista aprovado!' : '❌ Motorista reprovado');
+
+  } catch {
+    mostrarToast('⚠️ Erro ao atualizar status');
+  }
+}
+
+function mostrarToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Adiciona política de SELECT para autenticado (necessário para admin)
+// Rode no Supabase SQL Editor:
+// CREATE POLICY "admin_select" ON cadastros_motoristas FOR SELECT TO anon USING (true);
+// CREATE POLICY "admin_update" ON cadastros_motoristas FOR UPDATE TO anon USING (true);
+</script>
+</body>
+</html>
