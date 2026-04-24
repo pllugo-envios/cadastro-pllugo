@@ -563,65 +563,7 @@
         </select>
         <div class="error-msg" id="err-estado_civil">Selecione uma opção</div>
       </div>
-    </div>
-  </div>
 
-  <!-- SEÇÃO 2 -->
-  <div class="section" id="s2">
-    <div class="section-header">
-      <span class="section-badge">Passo 2 de 5</span>
-    </div>
-    <div class="section-title">Veículo e Endereço</div>
-    <p class="section-sub">Informe os dados do seu veículo e onde você mora.</p>
-
-    <div class="card">
-      <div class="field">
-        <label>Tipo de Veículo <span class="req">*</span></label>
-        <div class="radio-group">
-          <div class="radio-option">
-            <input type="radio" name="veiculo" id="v-moto" value="Moto">
-            <label for="v-moto">🏍️ Moto</label>
-          </div>
-          <div class="radio-option">
-            <input type="radio" name="veiculo" id="v-carro" value="Carro">
-            <label for="v-carro">🚗 Carro</label>
-          </div>
-        </div>
-        <div class="error-msg" id="err-veiculo">Selecione o tipo de veículo</div>
-      </div>
-      <div class="field">
-        <label>Placa do Veículo <span class="req">*</span></label>
-        <input type="text" id="placa" placeholder="ABC-1234" maxlength="8" required>
-        <div class="error-msg" id="err-placa">Campo obrigatório</div>
-      </div>
-      <div class="field">
-        <label>Endereço Completo <span class="req">*</span></label>
-        <textarea id="endereco" placeholder="Rua, número, complemento, bairro, cidade..." required></textarea>
-        <div class="error-msg" id="err-endereco">Campo obrigatório</div>
-      </div>
-      <div class="field">
-        <label>CEP <span class="req">*</span></label>
-        <input type="text" id="cep" placeholder="00000-000" maxlength="9" required>
-        <div class="error-msg" id="err-cep">Campo obrigatório</div>
-      </div>
-
-    </div>
-
-    <div class="card">
-      <p style="font-size:12px;color:var(--mid);font-weight:600;margin-bottom:14px;text-transform:uppercase;letter-spacing:0.06em;">MEI / Empresa</p>
-      <div class="field">
-        <label>Nome da Empresa</label>
-        <input type="text" id="empresa" placeholder="Razão social ou nome fantasia">
-      </div>
-      <div class="field">
-        <label>CNPJ</label>
-        <input type="text" id="cnpj" placeholder="00.000.000/0001-00" maxlength="18">
-      </div>
-    </div>
-  </div>
-
-
-    <div class="card">
       <div class="field">
         <label>Já possui experiência com entregas? <span class="req">*</span></label>
         <div class="radio-group">
@@ -681,6 +623,63 @@
         <div class="error-msg" id="err-periodo">Selecione um período</div>
       </div>
     </div>
+  </div>
+
+  <!-- SEÇÃO 2 -->
+  <div class="section" id="s2">
+    <div class="section-header">
+      <span class="section-badge">Passo 2 de 5</span>
+    </div>
+    <div class="section-title">Veículo e Endereço</div>
+    <p class="section-sub">Informe os dados do seu veículo e onde você mora.</p>
+
+    <div class="card">
+      <div class="field">
+        <label>Tipo de Veículo <span class="req">*</span></label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" name="veiculo" id="v-moto" value="Moto">
+            <label for="v-moto">🏍️ Moto</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="veiculo" id="v-carro" value="Carro">
+            <label for="v-carro">🚗 Carro</label>
+          </div>
+        </div>
+        <div class="error-msg" id="err-veiculo">Selecione o tipo de veículo</div>
+      </div>
+      <div class="field">
+        <label>Placa do Veículo <span class="req">*</span></label>
+        <input type="text" id="placa" placeholder="ABC-1234" maxlength="8" required>
+        <div class="error-msg" id="err-placa">Campo obrigatório</div>
+      </div>
+      <div class="field">
+        <label>Endereço Completo <span class="req">*</span></label>
+        <textarea id="endereco" placeholder="Rua, número, complemento, bairro, cidade..." required></textarea>
+        <div class="error-msg" id="err-endereco">Campo obrigatório</div>
+      </div>
+      <div class="field">
+        <label>CEP <span class="req">*</span></label>
+        <input type="text" id="cep" placeholder="00000-000" maxlength="9" required>
+        <div class="error-msg" id="err-cep">Campo obrigatório</div>
+      </div>
+
+    </div>
+
+    <div class="card">
+      <p style="font-size:12px;color:var(--mid);font-weight:600;margin-bottom:14px;text-transform:uppercase;letter-spacing:0.06em;">MEI / Empresa</p>
+      <div class="field">
+        <label>Nome da Empresa</label>
+        <input type="text" id="empresa" placeholder="Razão social ou nome fantasia">
+      </div>
+      <div class="field">
+        <label>CNPJ</label>
+        <input type="text" id="cnpj" placeholder="00.000.000/0001-00" maxlength="18">
+      </div>
+    </div>
+  </div>
+
+
 
   <!-- SEÇÃO 3 -->
   <div class="section" id="s3">
@@ -901,6 +900,7 @@ function validate() {
       emailEl.classList.add('error'); emailErr.classList.add('show'); ok = false;
     } else { emailEl.classList.remove('error'); emailErr.classList.remove('show'); }
     required('estado_civil');
+
   }
 
   if (current === 2) {
@@ -909,16 +909,6 @@ function validate() {
     if (!vEl) { vErr.classList.add('show'); ok = false; } else { vErr.classList.remove('show'); }
     required('placa'); required('endereco'); required('cep');
 
-    const expEl = document.querySelector('input[name="experiencia"]:checked');
-    const expErr = document.getElementById('err-experiencia');
-    if (!expEl) { expErr.classList.add('show'); ok = false; } else { expErr.classList.remove('show'); }
-
-    required('regiao_interesse');
-    required('bairros_interesse');
-
-    const perEl = document.querySelector('input[name="periodo"]:checked');
-    const perErr = document.getElementById('err-periodo');
-    if (!perEl) { perErr.classList.add('show'); ok = false; } else { perErr.classList.remove('show'); }
   }
 
   if (current === 3) {
