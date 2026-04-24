@@ -620,6 +620,68 @@
     </div>
   </div>
 
+
+    <div class="card">
+      <div class="field">
+        <label>Já possui experiência com entregas? <span class="req">*</span></label>
+        <div class="radio-group">
+          <div class="radio-option">
+            <input type="radio" name="experiencia" id="exp-sim" value="Sim">
+            <label for="exp-sim">✅ Sim</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="experiencia" id="exp-nao" value="Não">
+            <label for="exp-nao">❌ Não</label>
+          </div>
+        </div>
+        <div class="error-msg" id="err-experiencia">Selecione uma opção</div>
+      </div>
+
+      <div class="field">
+        <label>Qual região de interesse? <span class="req">*</span></label>
+        <select id="regiao_interesse" required>
+          <option value="">Selecione a cidade...</option>
+          <option>Santo André</option>
+          <option>São Bernardo do Campo</option>
+          <option>São Caetano do Sul</option>
+          <option>Diadema</option>
+          <option>Mauá</option>
+          <option>Ribeirão Pires</option>
+          <option>Rio Grande da Serra</option>
+        </select>
+        <div class="error-msg" id="err-regiao_interesse">Selecione uma região</div>
+      </div>
+
+      <div class="field">
+        <label>Bairros de interesse <span class="req">*</span></label>
+        <input type="text" id="bairros_interesse" placeholder="Ex: Centro, Vila X, Jardim Y..." required>
+        <div class="error-msg" id="err-bairros_interesse">Campo obrigatório</div>
+      </div>
+
+      <div class="field">
+        <label>Período de disponibilidade <span class="req">*</span></label>
+        <div class="radio-group" style="flex-wrap:wrap;">
+          <div class="radio-option" style="min-width:100px;">
+            <input type="radio" name="periodo" id="per-manha" value="Manhã">
+            <label for="per-manha">🌅 Manhã</label>
+          </div>
+          <div class="radio-option" style="min-width:100px;">
+            <input type="radio" name="periodo" id="per-tarde" value="Tarde">
+            <label for="per-tarde">☀️ Tarde</label>
+          </div>
+          <div class="radio-option" style="min-width:100px;">
+            <input type="radio" name="periodo" id="per-noite" value="Noite">
+            <label for="per-noite">🌙 Noite</label>
+          </div>
+          <div class="radio-option" style="min-width:100px;">
+            <input type="radio" name="periodo" id="per-qualquer" value="Qualquer período">
+            <label for="per-qualquer">🔄 Qualquer</label>
+          </div>
+        </div>
+        <div class="error-msg" id="err-periodo">Selecione um período</div>
+      </div>
+    </div>
+
   <!-- SEÇÃO 3 -->
   <div class="section" id="s3">
     <div class="section-header">
@@ -1009,7 +1071,7 @@ document.getElementById('cpf').addEventListener('input', function() {
 });
 
 // CEP mask
-['cep','cep_entrega'].forEach(id => {
+['cep'].forEach(id => {
   document.getElementById(id).addEventListener('input', function() {
     let v = this.value.replace(/\D/g,'');
     v = v.replace(/(\d{5})(\d)/,'$1-$2');
