@@ -676,7 +676,9 @@ function criarCard(c) {
         <div class="card-meta">
           <span>📱 ${c.telefone || '—'}</span>
           <span>🚗 ${c.tipo_veiculo || '—'} · ${c.placa || '—'}</span>
-          <span>🕐 ${data}</span>
+          ${c.regiao_interesse ? `<span>📍 ${c.regiao_interesse}</span>` : ''}
+          ${c.periodo_disponibilidade ? `<span>🕐 ${c.periodo_disponibilidade}</span>` : ''}
+          <span>📅 ${data}</span>
         </div>
       </div>
       <span class="status-badge status-${c.status}">${c.status}</span>
@@ -690,6 +692,10 @@ function criarCard(c) {
           <div class="detail-item"><div class="detail-item-label">Chave PIX</div><div class="detail-item-value">${c.chave_pix || '—'}</div></div>
           <div class="detail-item"><div class="detail-item-label">E-mail</div><div class="detail-item-value">${c.email || '—'}</div></div>
           <div class="detail-item"><div class="detail-item-label">Estado Civil</div><div class="detail-item-value">${c.estado_civil || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">Experiência</div><div class="detail-item-value">${c.experiencia_entregas || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">Período</div><div class="detail-item-value">${c.periodo_disponibilidade || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">Região de Interesse</div><div class="detail-item-value">${c.regiao_interesse || '—'}</div></div>
+          <div class="detail-item"><div class="detail-item-label">Bairros de Interesse</div><div class="detail-item-value">${c.bairros_interesse || '—'}</div></div>
         </div>
       </div>
 
@@ -698,7 +704,6 @@ function criarCard(c) {
         <div class="detail-grid">
           <div class="detail-item" style="grid-column:span 2"><div class="detail-item-label">Endereço</div><div class="detail-item-value">${c.endereco || '—'}</div></div>
           <div class="detail-item"><div class="detail-item-label">CEP</div><div class="detail-item-value">${c.cep || '—'}</div></div>
-          <div class="detail-item"><div class="detail-item-label">CEP Entrega</div><div class="detail-item-value">${c.cep_entrega || '—'}</div></div>
           ${c.nome_empresa ? `<div class="detail-item"><div class="detail-item-label">Empresa</div><div class="detail-item-value">${c.nome_empresa}</div></div>` : ''}
           ${c.cnpj ? `<div class="detail-item"><div class="detail-item-label">CNPJ</div><div class="detail-item-value">${c.cnpj}</div></div>` : ''}
         </div>
