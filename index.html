@@ -604,21 +604,17 @@
         <input type="text" id="cep" placeholder="00000-000" maxlength="9" required>
         <div class="error-msg" id="err-cep">Campo obrigatório</div>
       </div>
-      <div class="field">
-        <label>CEP da região de entrega <span class="req">*</span></label>
-        <input type="text" id="cep_entrega" placeholder="CEP onde deseja trabalhar" required>
-        <div class="error-msg" id="err-cep_entrega">Campo obrigatório</div>
-      </div>
+
     </div>
 
     <div class="card">
-      <p style="font-size:12px;color:var(--mid);font-weight:600;margin-bottom:14px;text-transform:uppercase;letter-spacing:0.06em;">MEI / Empresa (opcional)</p>
+      <p style="font-size:12px;color:var(--mid);font-weight:600;margin-bottom:14px;text-transform:uppercase;letter-spacing:0.06em;">MEI / Empresa</p>
       <div class="field">
-        <label>Nome da Empresa <span class="opt">(opcional)</span></label>
+        <label>Nome da Empresa</label>
         <input type="text" id="empresa" placeholder="Razão social ou nome fantasia">
       </div>
       <div class="field">
-        <label>CNPJ <span class="opt">(opcional)</span></label>
+        <label>CNPJ</label>
         <input type="text" id="cnpj" placeholder="00.000.000/0001-00" maxlength="18">
       </div>
     </div>
@@ -849,7 +845,18 @@ function validate() {
     const vEl = document.querySelector('input[name="veiculo"]:checked');
     const vErr = document.getElementById('err-veiculo');
     if (!vEl) { vErr.classList.add('show'); ok = false; } else { vErr.classList.remove('show'); }
-    required('placa'); required('endereco'); required('cep'); required('cep_entrega');
+    required('placa'); required('endereco'); required('cep');
+
+    const expEl = document.querySelector('input[name="experiencia"]:checked');
+    const expErr = document.getElementById('err-experiencia');
+    if (!expEl) { expErr.classList.add('show'); ok = false; } else { expErr.classList.remove('show'); }
+
+    required('regiao_interesse');
+    required('bairros_interesse');
+
+    const perEl = document.querySelector('input[name="periodo"]:checked');
+    const perErr = document.getElementById('err-periodo');
+    if (!perEl) { perErr.classList.add('show'); ok = false; } else { perErr.classList.remove('show'); }
   }
 
   if (current === 3) {
@@ -948,7 +955,10 @@ async function submitForm() {
       placa: document.getElementById('placa').value,
       endereco: document.getElementById('endereco').value,
       cep: document.getElementById('cep').value,
-      cep_entrega: document.getElementById('cep_entrega').value,
+      experiencia_entregas: document.querySelector('input[name="experiencia"]:checked')?.value || '',
+      regiao_interesse: document.getElementById('regiao_interesse').value,
+      bairros_interesse: document.getElementById('bairros_interesse').value,
+      periodo_disponibilidade: document.querySelector('input[name="periodo"]:checked')?.value || '',
       nome_empresa: document.getElementById('empresa').value || null,
       cnpj: document.getElementById('cnpj').value || null,
       lgpd_aceito: document.getElementById('lgpd').checked,
