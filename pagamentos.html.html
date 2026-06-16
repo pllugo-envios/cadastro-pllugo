@@ -272,6 +272,7 @@
             <p>Quando um relatório é importado, o motorista é identificado pelo nome e já traz telefone e tarifa daqui. Cadastre <b>apelidos/variações</b> de nome para casar nomes escritos de formas diferentes nos relatórios. A coluna <b>Origem</b> mostra a região onde o motorista mais entrega (Mauá, Ribeirão Pires ou Rio Grande da Serra) — toque em <b>usar</b> para defini-la como cidade padrão.</p>
           </div>
           <div class="chips">
+            <button class="btn ghost sm" id="btnConsolidar">🧹 Padronizar</button>
             <button class="btn primary sm" id="btnAddDriver">+ Novo motorista</button>
           </div>
         </div>
@@ -428,6 +429,8 @@ function normName(s){
   n = n.replace(/^[A-Z]\s+/,'');
   return n;
 }
+// nome para EXIBIÇÃO: sem prefixo "F " e em MAIÚSCULAS (padrão visual do app)
+function nomeFmt(s){ return (s||'').toString().replace(/^[A-Za-z]\s+/,'').trim().toUpperCase(); }
 /* ---------- região de atuação (a partir da cidade da entrega) ----------
    Classifica a cidade do relatório em uma das 3 regiões operadas pela Pllugo.
    Robusto a acentos e variações de grafia (ex.: "Maua", "RIBEIRAO PIRES",
@@ -596,7 +599,7 @@ function computeFechamentos(){
     const k = d ? ('drv:'+d.id) : ('nm:'+normName(nome));
     if(!map[k]){
       map[k] = {
-        key:k, nome: d? d.nome : (nome||'(sem nome)'),
+        key:k, nome: nomeFmt(d? d.nome : (nome||'(sem nome)')),
         telefone: d? (d.telefone||'') : '',
         cidade: d? (d.cidade||'') : '',
         cadastrado: !!d,
@@ -671,12 +674,14 @@ function renderFech(){
 
   // KPIs
   const totMot = data.length;
-  const totEnt = data.reduce((s,d)=>s+d.jt+d.imile,0);
+  const totJT = data.reduce((s,d)=>s+d.jt,0);
+  const totIM = data.reduce((s,d)=>s+d.imile,0);
+  const totEnt = totJT + totIM;
   const totPag = data.reduce((s,d)=>s+d.liquido,0);
   const totExt = data.reduce((s,d)=>s+d.extravioValorCalc,0);
   $('#fechKpis').innerHTML = [
     kpi('Motoristas','👥',totMot, (data.filter(d=>!d.cadastrado).length)+' sem cadastro', 'var(--brand)','var(--brand-soft)'),
-    kpi('Entregas','📦',totEnt.toLocaleString('pt-BR'),'J&T + iMile no período','var(--blue)','var(--blue-soft)'),
+    kpi('Entregas','📦',totEnt.toLocaleString('pt-BR'),`J&amp;T ${totJT.toLocaleString('pt-BR')} · iMile ${totIM.toLocaleString('pt-BR')}`,'var(--blue)','var(--blue-soft)'),
     kpi('Total a pagar','💸',fmtBRL(totPag),'líquido após descontos','var(--green)','var(--green-soft)','sm'),
     kpi('Extravios','⚠️',fmtBRL(totExt), data.reduce((s,d)=>s+d.extravios.length,0)+' pedidos','var(--red)','var(--red-soft)','sm')
   ].join('');
@@ -938,7 +943,7 @@ const COL_HINTS = {
   telefone:['telefone','celular','whatsapp','fone','contato','tel','phone','numero']
 };
 function detectCol(headers, key){
-  const hints=COL_HINTS[key]||[];
+  const hints=(COL_HINTS[key]||[]).map(x=>norm(x).replace(/ /g,''));   // normaliza p/ mesmo caixa dos headers
   const H=headers.map(h=>norm(h).replace(/ /g,''));
   for(const hint of hints){ const i=H.indexOf(hint); if(i>-1) return i; }
   for(const hint of hints){ const i=H.findIndex(h=>h.includes(hint)); if(i>-1) return i; }
@@ -950,6 +955,9 @@ const FORMAT_PRESETS = {
     { name:'J&T (carta de porte)',
       match:['NUMERO DE PEDIDO JMS','RESPONSAVEL PELA ENTREGA'],
       cols:{ motorista:'Responsável pela entrega', pedido:'Número de pedido JMS', data:'Horário da entrega', cidade:'Cidade Destino' } },
+    { name:'J&T (exportar carta de porte)',
+      match:['NUMERO DE PEDIDO','NOME DO ENTREGADOR'],
+      cols:{ motorista:'Nome do entregador responsável', pedido:'Número de pedido', data:'DATA DA ENTREGA', cidade:'Cidade Destino' } },
     { name:'iMile (Delivered)',
       match:['WAYBILL NO','RECIPIENT CITY','SCAN STATION'],
       cols:{ motorista:'DA', pedido:'Waybill No.', data:'Delivered time', cidade:'Recipient City' } }
@@ -973,9 +981,10 @@ function applyPreset(tipo, headers, detected){
   const presets=FORMAT_PRESETS[tipo]||[];
   for(const p of presets){
     if(p.match.every(m=> Hn.some(h=> h.includes(norm(m))))){
-      Object.keys(p.cols).forEach(field=>{
-        const idx=findHeader(headers, p.cols[field]);
-        if(idx>-1) detected[field]=idx;
+      // o preset é autoritativo: usa as colunas dele; zera os campos que ele não define
+      Object.keys(detected).forEach(field=>{
+        if(p.cols[field]!=null){ const idx=findHeader(headers, p.cols[field]); if(idx>-1) detected[field]=idx; }
+        else { detected[field] = -1; }
       });
       return p.name;
     }
@@ -1255,7 +1264,7 @@ function openMapper(k, rows){
   const opt=(sel)=> headers.map((h,i)=>`<option value="${i}" ${i===sel?'selected':''}>${esc(h)}</option>`).join('');
   const previewCols=need.filter(n=>detected[n]>-1);
   const fields=need.map(key=>{
-    const required = (key==='motorista'||key==='nome'||(cfg.tipo==='entregas'&&key==='qtd')||(cfg.tipo==='extravios'&&key==='pedido')||(cfg.tipo==='motoristas'&&key==='telefone'));
+    const required = (key==='motorista'||key==='nome'||(cfg.tipo==='extravios'&&key==='pedido')||(cfg.tipo==='motoristas'&&key==='telefone'));
     return `<div><label class="lbl">${labels[key]} ${required?'<span style="color:var(--brand)">*</span>':'<span style="color:var(--text-faint)">(opcional)</span>'}</label>
       <select class="fld sm" data-map="${key}"><option value="-1">— não usar —</option>${opt(detected[key])}</select></div>`;
   }).join('');
@@ -1389,7 +1398,7 @@ function doImport(k,cfg,sel,body){
       if(regEnt.length) comReg++;
       const exist=findDriver(o.nome);
       if(exist){ if(o.tel)exist.telefone=o.tel; if(cidadeFinal)exist.cidade=cidadeFinal; }
-      else S.drivers.push({id:uid(),nome:o.nome,telefone:o.tel,cidade:cidadeFinal,tarifa:null,aliases:[]});
+      else S.drivers.push({id:uid(),nome:nomeFmt(o.nome),telefone:o.tel,cidade:cidadeFinal,tarifa:null,aliases:[]});
       added++;
     });
     save(); closeModal();
@@ -1406,9 +1415,237 @@ function doImport(k,cfg,sel,body){
 /* =========================================================================
    MOTORISTAS
    ========================================================================= */
+/* ---------- padronização / consolidação de nomes ----------
+   Junta variações do mesmo motorista (typos, nome incompleto, prefixo "F ")
+   em um cadastro único com apelidos. O "F " já é tratado em normName. */
+function levRatio(a,b){
+  if(a===b) return 1;
+  const m=a.length, n=b.length; if(!m||!n) return 0;
+  const dp=Array.from({length:m+1},(_,i)=>[i,...Array(n).fill(0)]);
+  for(let j=0;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++){
+    const c=a[i-1]===b[j-1]?0:1;
+    dp[i][j]=Math.min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+c);
+  }
+  return 1 - dp[m][n]/Math.max(m,n);
+}
+function nomeSimilar(a,b){           // a,b = chaves normName (sem acento, maiúsculas, sem "F ")
+  if(a===b) return 1;
+  const ta=a.split(' ').filter(Boolean), tb=b.split(' ').filter(Boolean);
+  const short = ta.length<=tb.length?ta:tb;
+  const longSet = new Set(ta.length<=tb.length?tb:ta);
+  const longLen = Math.max(ta.length,tb.length);
+  if(short.length>=1 && longSet.has(short[0]) && short.every(t=>longSet.has(t))){
+    if(short.length>=2) return 0.95;          // ex.: "RYAN JAMES" ⊂ "RYAN JAMES PACHECO DA SILVA"
+    if(longLen>=2)      return 0.9;           // ex.: "GILMAR" ⊂ "GILMAR BENICIO DA SILVA"
+  }
+  return levRatio(a,b);                        // ex.: "...FEREIRA" vs "...PEREIRA"; "VDANIEL" vs "DANIEL"
+}
+// junta todos os nomes que aparecem (relatórios + cadastro), com frequência
+function coletaNomes(){
+  const map=new Map();  // normKey -> {raws:Map(raw->freq), key, freq}
+  const add=(raw,w)=>{
+    raw=(raw||'').toString().trim(); if(!raw) return;
+    const key=normName(raw); if(!key) return;
+    let o=map.get(key); if(!o){ o={key, raws:new Map(), freq:0}; map.set(key,o); }
+    o.raws.set(raw,(o.raws.get(raw)||0)+w); o.freq+=w;
+  };
+  S.entregas.forEach(e=> add(e.motorista, e.qtd||1));
+  S.extravios.forEach(x=> add(x.motorista, 1));
+  S.drivers.forEach(d=>{ add(d.nome, 1); (d.aliases||[]).forEach(a=>add(a,1)); });
+  return map;
+}
+function limpaPrefixo(raw){ return (raw||'').replace(/^[A-Za-z]\s+/, '').trim(); }  // tira "F " etc. do display
+// agrupa por similaridade; retorna clusters [{canonical, variants:[raw], keys:[], freq, telefone}]
+function clusterMotoristas(){
+  const map=coletaNomes();
+  const keys=Array.from(map.keys());
+  // union-find
+  const parent={}; keys.forEach(k=>parent[k]=k);
+  const find=x=>{ while(parent[x]!==x){ parent[x]=parent[parent[x]]; x=parent[x]; } return x; };
+  const uni=(a,b)=>{ const ra=find(a),rb=find(b); if(ra!==rb) parent[ra]=rb; };
+  // pré-liga cadastros que dividem o mesmo telefone
+  const telKey={};
+  S.drivers.forEach(d=>{ const t=phoneDigits(d.telefone); if(t){ const k=normName(d.nome); if(telKey[t]&&keys.includes(k)) uni(telKey[t],k); else telKey[t]=k; } });
+  // similaridade entre pares
+  for(let i=0;i<keys.length;i++) for(let j=i+1;j<keys.length;j++){
+    if(nomeSimilar(keys[i],keys[j])>=0.85) uni(keys[i],keys[j]);
+  }
+  const groups={};
+  keys.forEach(k=>{ const r=find(k); (groups[r]=groups[r]||[]).push(k); });
+  const clusters=[];
+  Object.values(groups).forEach(ks=>{
+    // escolhe o nome canônico: mais tokens, depois mais frequente
+    let best='', bestScore=-1, freq=0;
+    ks.forEach(k=>{
+      const o=map.get(k); freq+=o.freq;
+      o.raws.forEach((w,raw)=>{
+        const score = limpaPrefixo(raw).split(/\s+/).length*1000 + w;
+        if(score>bestScore){ bestScore=score; best=nomeFmt(raw); }
+      });
+    });
+    // todas as variações de grafia (raws), exceto a que vira canônica
+    const variants=new Set();
+    ks.forEach(k=> map.get(k).raws.forEach((w,raw)=>{ if(normName(raw)!==normName(best)) variants.add(raw); }));
+    // telefone conhecido
+    let tel=''; S.drivers.forEach(d=>{ if(!tel && phoneDigits(d.telefone) && ks.includes(normName(d.nome))) tel=d.telefone; });
+    clusters.push({ canonical:best, variants:Array.from(variants), keys:ks, freq, telefone:tel,
+      precisa: ks.length>1 || Array.from(map.get(ks[0]).raws.keys()).some(r=>limpaPrefixo(r)!==r) });
+  });
+  // ordena: mais variações primeiro, depois mais frequentes
+  clusters.sort((a,b)=> (b.variants.length-a.variants.length) || (b.freq-a.freq));
+  return clusters;
+}
+function openConsolidar(){
+  const todos=clusterMotoristas();
+  const clusters=todos.filter(c=> c.variants.length>0);          // só os que precisam de revisão (merges)
+  const comPrefixo=S.drivers.filter(d=> limpaPrefixo(d.nome)!==d.nome).length;
+  if(!clusters.length){
+    if(comPrefixo){ stripPrefixosTodos(); return; }
+    toast('Nenhuma variação encontrada — nomes já estão padronizados','ok'); return;
+  }
+  const linhas = clusters.map((c,ci)=>`
+    <div class="cons-group" style="padding:12px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:800;letter-spacing:.05em;color:var(--text-faint);text-transform:uppercase">Nome padrão</span>
+        ${c.telefone?`<span class="badge neutral" style="font-size:11px">📞 ${esc(c.telefone)}</span>`:''}
+        <span style="font-size:11px;color:var(--text-faint)">${c.freq} ocorrência(s)</span>
+      </div>
+      <input class="fld sm cons-name" data-c="${ci}" value="${esc(c.canonical)}" style="font-weight:700;text-transform:uppercase;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.05em;color:var(--text-faint);text-transform:uppercase;margin-bottom:4px">Marque os nomes que são o MESMO motorista</div>
+      ${c.variants.map((v,vi)=>`
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+          <input type="checkbox" class="cons-var" data-c="${ci}" data-v="${vi}" checked style="width:17px;height:17px">
+          <span>${esc(v)}</span>
+        </label>`).join('')}
+    </div>`).join('');
+  modal(`<h3>🧹 Padronizar motoristas</h3>
+    <p class="mh">Encontrei <b>${clusters.length}</b> motorista(s) com possíveis variações. Para cada um, confira o <b>nome padrão</b> (editável, em maiúsculas) e <b>marque só os nomes que são realmente a mesma pessoa</b> — desmarque sugestões erradas. Os marcados viram <b>apelidos</b>, então J&T e iMile caem no mesmo motorista.${comPrefixo?` O prefixo "F " será removido de ${comPrefixo} cadastro(s).`:''}</p>
+    <div class="table-wrap" style="max-height:58vh;overflow:auto">${linhas}</div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
+      <button class="btn primary" id="mConsolidar">Aplicar padronização</button>
+    </div>`);
+  $('#mConsolidar').onclick=()=>{
+    const sel=[];
+    clusters.forEach((c,ci)=>{
+      const canon = ($(`.cons-name[data-c="${ci}"]`).value.trim() || c.canonical).toUpperCase();
+      const vars = c.variants.filter((v,vi)=> { const ck=$(`.cons-var[data-c="${ci}"][data-v="${vi}"]`); return ck && ck.checked; });
+      if(vars.length) sel.push(Object.assign({}, c, {canonical:canon, variants:vars}));
+    });
+    aplicaConsolidacao(sel);
+  };
+}
+// remove prefixo de letra solta do nome de todos os cadastros (cosmético; o casamento já ignora)
+function stripPrefixosTodos(){
+  let n=0; S.drivers.forEach(d=>{ const limpo=limpaPrefixo(d.nome); if(limpo!==d.nome){ d.nome=limpo; n++; } });
+  save(); renderDrivers(); renderFech();
+  toast(n?('Prefixo "F " removido de '+n+' cadastro(s)'):'Nenhum prefixo a remover','ok');
+}
+function aplicaConsolidacao(clusters){
+  let criados=0, mesclados=0;
+  clusters.forEach(c=>{
+    const allNames=[c.canonical, ...c.variants];
+    // todos os cadastros existentes que casam com qualquer variação
+    const matched=S.drivers.filter(d=> allNames.some(n=> normName(d.nome)===normName(n) || (d.aliases||[]).some(a=>normName(a)===normName(n)) ));
+    let alvo = matched[0];
+    if(!alvo){ alvo={id:uid(),nome:c.canonical,telefone:c.telefone||'',cidade:'',tarifa:null,aliases:[]}; S.drivers.push(alvo); criados++; }
+    else { mesclados += matched.length>1?matched.length:0; }
+    alvo.nome=c.canonical;
+    if(!alvo.telefone && c.telefone) alvo.telefone=c.telefone;
+    // junta apelidos: variações + nomes/apelidos dos cadastros mesclados
+    const aliasSet=new Set((alvo.aliases||[]));
+    c.variants.forEach(v=>{ if(normName(v)!==normName(c.canonical)) aliasSet.add(v); });
+    matched.slice(1).forEach(d=>{
+      if(normName(d.nome)!==normName(c.canonical)) aliasSet.add(d.nome);
+      (d.aliases||[]).forEach(a=>{ if(normName(a)!==normName(c.canonical)) aliasSet.add(a); });
+      if(!alvo.telefone && d.telefone) alvo.telefone=d.telefone;
+      if(!alvo.cidade && d.cidade) alvo.cidade=d.cidade;
+      if((alvo.tarifa==null||alvo.tarifa==='') && d.tarifa!=null && d.tarifa!=='') alvo.tarifa=d.tarifa;
+    });
+    alvo.aliases=Array.from(aliasSet);
+    // remove os cadastros mesclados (exceto o alvo)
+    const removeIds=new Set(matched.slice(1).map(d=>d.id));
+    if(removeIds.size) S.drivers=S.drivers.filter(d=> d.id===alvo.id || !removeIds.has(d.id));
+  });
+  // limpeza visual: nomes de todos os cadastros sem prefixo "F " e em MAIÚSCULAS
+  S.drivers.forEach(d=>{ const f=nomeFmt(d.nome); if(f) d.nome=f; });
+  save(); closeModal(); renderDrivers(); renderFech();
+  toast(clusters.length? ('Padronização aplicada · '+clusters.length+' motorista(s) consolidado(s)') : 'Prefixo "F " removido dos nomes','ok');
+}
+
+// pool de nomes (todas as grafias vistas em entregas, extravios e cadastros)
+function nomePoolAll(){
+  const set=new Map();   // normName -> display (maiúsculas, sem "F ")
+  const add=raw=>{ const f=nomeFmt(raw); const k=normName(raw); if(f && !set.has(k)) set.set(k,f); };
+  S.entregas.forEach(e=>add(e.motorista));
+  S.extravios.forEach(x=>add(x.motorista));
+  S.drivers.forEach(d=>{ add(d.nome); (d.aliases||[]).forEach(add); });
+  return Array.from(set.values()).sort();
+}
+// se existir outro cadastro com este nome/apelido, funde nele e remove o duplicado
+function mergeDriverInto(target, name){
+  const k=normName(name);
+  const other=S.drivers.find(x=> x.id!==target.id && (normName(x.nome)===k || (x.aliases||[]).some(a=>normName(a)===k)) );
+  if(!other) return false;
+  const set=new Set(target.aliases||[]);
+  if(normName(other.nome)!==normName(target.nome)) set.add(other.nome);
+  (other.aliases||[]).forEach(a=>{ if(normName(a)!==normName(target.nome)) set.add(a); });
+  target.aliases=Array.from(set);
+  if(!target.telefone && other.telefone) target.telefone=other.telefone;
+  if(!target.cidade && other.cidade) target.cidade=other.cidade;
+  if((target.tarifa==null||target.tarifa==='') && other.tarifa!=null && other.tarifa!=='') target.tarifa=other.tarifa;
+  S.drivers=S.drivers.filter(x=>x.id!==other.id);
+  return true;
+}
+// editor de variações com autocomplete a partir do banco de nomes
+function openVincular(id){
+  const d=S.drivers.find(x=>x.id===id); if(!d) return;
+  if(!d.aliases) d.aliases=[];
+  modal(`<h3>🔗 Variações de nome</h3>
+    <p class="mh">Vincule todas as grafias deste motorista (J&T, iMile, extravios). Ao vincular um nome que tem cadastro separado, ele é <b>mesclado e removido</b> — fica só este cadastro.</p>
+    <label class="lbl">Nome padrão</label>
+    <input class="fld sm" id="vincNome" value="${esc(nomeFmt(d.nome))}" style="text-transform:uppercase;font-weight:700;margin-bottom:12px">
+    <label class="lbl">Variações vinculadas</label>
+    <div id="vincChips" class="chips" style="margin:6px 0 14px;min-height:24px"></div>
+    <label class="lbl">Adicionar variação — digite para buscar no banco de nomes</label>
+    <input class="fld sm" id="vincBusca" placeholder="ex.: TA..." autocomplete="off">
+    <div id="vincSug" style="max-height:200px;overflow:auto;margin-top:6px;border:1px solid var(--border);border-radius:10px"></div>
+    <div class="modal-actions"><button class="btn primary" id="vincOk">Concluir</button></div>`);
+  const ownKeys=()=> new Set([normName(d.nome), ...d.aliases.map(normName)]);
+  function drawChips(){
+    const c=$('#vincChips');
+    if(!d.aliases.length){ c.innerHTML='<span style="color:var(--text-faint);font-size:13px">Nenhuma ainda</span>'; return; }
+    c.innerHTML=d.aliases.map((a,i)=>`<span class="badge neutral" style="font-size:12px">${esc(nomeFmt(a))} <b data-rm="${i}" style="cursor:pointer;margin-left:5px">×</b></span>`).join('');
+    $$('[data-rm]',c).forEach(b=>b.addEventListener('click',()=>{ d.aliases.splice(+b.dataset.rm,1); save(); drawChips(); drawSug(); renderFech(); }));
+  }
+  function drawSug(){
+    const q=norm($('#vincBusca').value).replace(/ /g,'');
+    const own=ownKeys();
+    let pool=nomePoolAll().filter(n=> !own.has(normName(n)));
+    if(q) pool=pool.filter(n=> norm(n).replace(/ /g,'').includes(q));
+    pool.sort((a,b)=>{ const A=norm(a).replace(/ /g,'').startsWith(q)?0:1, B=norm(b).replace(/ /g,'').startsWith(q)?0:1; return A-B || a.localeCompare(b); });
+    pool=pool.slice(0,40);
+    const box=$('#vincSug');
+    if(!pool.length){ box.innerHTML='<div style="padding:10px;color:var(--text-faint);font-size:13px">Nenhum nome encontrado no banco</div>'; return; }
+    box.innerHTML=pool.map(n=>`<div class="vinc-opt" data-n="${esc(n)}" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--border)">${esc(n)}</div>`).join('');
+    $$('.vinc-opt',box).forEach(o=>o.addEventListener('click',()=>{
+      const nome=o.dataset.n;
+      if(!d.aliases.some(a=>normName(a)===normName(nome))) d.aliases.push(nome);
+      mergeDriverInto(d, nome);
+      save(); $('#vincBusca').value=''; drawChips(); drawSug(); renderFech();
+    }));
+  }
+  $('#vincNome').addEventListener('change',e=>{ d.nome=nomeFmt(e.target.value); save(); renderFech(); });
+  $('#vincBusca').addEventListener('input',drawSug);
+  $('#vincOk').addEventListener('click',()=>{ closeModal(); renderDrivers(); renderFech(); });
+  drawChips(); drawSug();
+}
+
 function renderDrivers(){
   const q=norm($('#searchDriver').value);
-  const list=S.drivers.filter(d=> !q || norm(d.nome).includes(q) || phoneDigits(d.telefone).includes(q.replace(/\D/g,'')) );
+  const qd=q.replace(/\D/g,'');
+  const list=S.drivers.filter(d=> !q || norm(d.nome).includes(q) || (d.aliases||[]).some(a=>norm(a).includes(q)) || (qd && phoneDigits(d.telefone).includes(qd)) );
   $('#driverCount').textContent=S.drivers.length;
   // lookup de origem por motorista (a partir das entregas importadas)
   const origemMap={};
@@ -1424,21 +1661,23 @@ function renderDrivers(){
         + (cidadeJaBate ? '' : ` <button class="btn ghost sm" data-usar-origem="${esc(og.origem)}" title="Definir como cidade padrão (usada na tarifa quando a entrega não traz cidade)" style="min-height:26px;padding:0 8px">usar</button>`)
       : '<span style="color:var(--text-faint)">—</span>';
     const tr=el(`<tr>
-      <td><input class="cellinput" data-k="nome" value="${esc(d.nome)}"></td>
+      <td><input class="cellinput" data-k="nome" value="${esc(nomeFmt(d.nome))}" style="text-transform:uppercase"></td>
       <td><input class="cellinput" data-k="telefone" value="${esc(d.telefone||'')}" placeholder="—"></td>
       <td><input class="cellinput" data-k="cidade" value="${esc(d.cidade||'')}" placeholder="—"></td>
       <td>${ogCell}</td>
       <td><input class="cellinput" data-k="tarifa" inputmode="decimal" value="${d.tarifa!=null&&d.tarifa!==''?(''+d.tarifa).replace('.',','):''}" placeholder="base"></td>
-      <td><input class="cellinput" data-k="aliases" value="${esc((d.aliases||[]).join('; '))}" placeholder="ex.: João S.; J Silva"></td>
+      <td><button class="btn ghost sm" data-vinc title="Vincular grafias deste motorista">🔗 ${(d.aliases||[]).length} variação(ões)</button></td>
       <td style="text-align:right"><button class="btn ghost sm" data-del>excluir</button></td>
     </tr>`);
     $$('[data-k]',tr).forEach(inp=> inp.addEventListener('change',()=>{
       const key=inp.dataset.k;
-      if(key==='aliases') d.aliases=inp.value.split(/[;,]/).map(s=>s.trim()).filter(Boolean);
-      else if(key==='tarifa') d.tarifa = inp.value.trim()===''?null:parseNum(inp.value);
+      if(key==='tarifa') d.tarifa = inp.value.trim()===''?null:parseNum(inp.value);
+      else if(key==='nome') d.nome=nomeFmt(inp.value);
       else d[key]=inp.value.trim();
-      save(); if(key==='tarifa'||key==='cidade'||key==='telefone'||key==='aliases'||key==='nome') renderFech();
+      save(); renderFech();
     }));
+    const btnVinc=$('[data-vinc]',tr);
+    if(btnVinc) btnVinc.addEventListener('click',()=> openVincular(d.id));
     const btnOg=$('[data-usar-origem]',tr);
     if(btnOg) btnOg.addEventListener('click',()=>{
       d.cidade=btnOg.dataset.usarOrigem; save(); renderDrivers(); renderFech();
@@ -1605,6 +1844,7 @@ function bind(){
   $('#extAutoSync').addEventListener('change',e=>{ S.config.extAutoSync=e.target.checked; save(); });
   $('#btnSyncExt').addEventListener('click',()=>syncExtravios(false));
   $('#searchDriver').addEventListener('input',renderDrivers);
+  $('#btnConsolidar').addEventListener('click',openConsolidar);
   $('#btnAddDriver').addEventListener('click',addDriver);
   $('#btnSaveRules').addEventListener('click',saveRules);
   $('#btnAddCidade').addEventListener('click',()=>{ S.cidades.push({id:uid(),cidade:'',tarifa:0}); save(); renderCidades(); });
