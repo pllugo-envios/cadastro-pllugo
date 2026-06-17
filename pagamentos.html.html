@@ -244,6 +244,18 @@
             <p>Importe os relatórios da J&amp;T e da iMile (entregas), o <b>Controle de Tickets</b> (cadastra motoristas com telefone e região pela cidade de destino), extravios e a base de telefones. Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. Nas entregas, a ferramenta detecta a <b>quinzena</b> (01–15 ou 16–fim do mês) e registra cada entrega no período certo.</p>
           </div>
         </div>
+        <div class="panel" style="margin-bottom:18px;border:1px solid #FECACA;background:var(--brand-soft)">
+          <div class="panel-head">
+            <div><div class="panel-title">📦 Backup e transferência</div><h3>Compartilhar os dados com o time</h3></div>
+          </div>
+          <p class="panel-note" style="margin-top:0">Enquanto o acesso compartilhado na nuvem não fica pronto, use esta forma provisória para passar tudo o que você já importou para outra pessoa: clique em <b>Exportar</b>, envie o arquivo gerado (WhatsApp, e-mail, etc.) e a pessoa abre o app e clica em <b>Importar</b>. Os dados ficam idênticos aos seus.</p>
+          <div class="chips" style="margin-top:12px;gap:10px">
+            <button class="btn primary sm" id="btnExportData">⬇️ Exportar dados</button>
+            <button class="btn secondary sm" id="btnImportData">⬆️ Importar dados</button>
+            <input type="file" id="fileImportData" accept=".json,application/json" style="display:none">
+          </div>
+          <p class="panel-note" style="margin-top:12px">⚠️ Provisório: cada pessoa fica com uma <b>cópia própria</b>. Se você importar mais relatórios depois, precisa exportar e reenviar o arquivo. Importar <b>substitui</b> os dados do navegador de quem recebe. A versão definitiva (nuvem) elimina esse vai-e-volta.</p>
+        </div>
         <div class="panel" style="margin-bottom:18px">
           <div class="panel-head">
             <div><div class="panel-title">🔄 Extravios automáticos</div><h3>Sincronizar do Google Sheets</h3></div>
@@ -470,6 +482,50 @@ function load(){
   }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
 }
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){ toast('Erro ao salvar (armazenamento cheio?)','err'); } }
+
+/* ---------- backup / transferência (provisório, via arquivo) ----------
+   Exporta todo o estado como JSON para outra pessoa importar no app dela.
+   Solução temporária até o backend compartilhado (Supabase) entrar. */
+function exportData(){
+  try{
+    const blob = new Blob([JSON.stringify(S,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const hoje = new Date().toISOString().slice(0,10);
+    a.href=url; a.download='pllugo-pagamentos-backup-'+hoje+'.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    toast('Backup exportado — envie o arquivo para o time','ok');
+  }catch(e){ toast('Erro ao exportar backup','err'); }
+}
+function importData(file){
+  const r = new FileReader();
+  r.onload = ()=>{
+    let obj;
+    try{ obj = JSON.parse(r.result); }
+    catch(e){ toast('Arquivo inválido (não é um backup .json)','err'); return; }
+    if(typeof obj!=='object' || obj===null || (!('drivers' in obj) && !('entregas' in obj) && !('config' in obj))){
+      toast('Arquivo não parece um backup do app','err'); return;
+    }
+    const nDrv=(obj.drivers||[]).length, nEnt=(obj.entregas||[]).length, nExt=(obj.extravios||[]).length, nFec=(obj.fechamentos||[]).length;
+    modal(`<h3>Importar backup</h3>
+      <p class="mh">O arquivo contém <b>${nDrv}</b> motorista(s), <b>${nEnt}</b> grupo(s) de entregas, <b>${nExt}</b> extravio(s) e <b>${nFec}</b> fechamento(s) salvos.</p>
+      <p class="mh" style="color:var(--red)">Isso vai <b>substituir todos os dados deste navegador</b> pelos do arquivo. O que estiver aqui agora será perdido.</p>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
+        <button class="btn primary" id="cfgImp">Substituir e importar</button>
+      </div>`);
+    $('#cfgImp').onclick=()=>{
+      S = Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)), obj,
+        {config:Object.assign({}, DEFAULT_STATE.config, obj.config||{})});
+      save(); closeModal();
+      renderImportCards(); renderFech(); renderDrivers(); refreshPeriodoSelector(); renderExtSyncInfo();
+      toast('Backup importado com sucesso','ok');
+    };
+  };
+  r.onerror = ()=> toast('Não foi possível ler o arquivo','err');
+  r.readAsText(file);
+}
 const uid = ()=> Math.random().toString(36).slice(2,10);
 
 /* ---------- helpers ---------- */
@@ -2112,6 +2168,9 @@ function bind(){
   $('#extSoConcluido').addEventListener('change',e=>{ S.config.extSoConcluido=e.target.checked; save(); });
   $('#extAutoSync').addEventListener('change',e=>{ S.config.extAutoSync=e.target.checked; save(); });
   $('#btnSyncExt').addEventListener('click',()=>syncExtravios(false));
+  if($('#btnExportData')) $('#btnExportData').addEventListener('click',exportData);
+  if($('#btnImportData')) $('#btnImportData').addEventListener('click',()=>$('#fileImportData').click());
+  if($('#fileImportData')) $('#fileImportData').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=''; });
   $('#searchDriver').addEventListener('input',renderDrivers);
   ['fltCidade','fltOrigem','fltTarifa'].forEach(id=>{ const e=$('#'+id); if(e) e.addEventListener('change',renderDrivers); });
   if($('#btnLimparFlt')) $('#btnLimparFlt').addEventListener('click',()=>{
