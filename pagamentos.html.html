@@ -535,22 +535,19 @@ function importData(file){
 }
 
 /* ---------- manutenção: limpar quinzenas antigas ----------
-   Preserva sempre motoristas, regras, cidades e apelidos. Remove as entregas
-   das quinzenas não marcadas e, conforme as opções, fechamentos/extravios/ajustes. */
-function entregasPorPeriodo(){
-  const m=new Map(); // periodo -> {grupos, qtd}
-  S.entregas.forEach(e=>{
-    const p=e.periodo||'';
-    const o=m.get(p)||{grupos:0,qtd:0}; o.grupos++; o.qtd+=(parseNum(e.qtd)||0); m.set(p,o);
-  });
+   Preserva sempre motoristas, regras, cidades e apelidos. Considera entregas
+   E extravios ao listar as quinzenas. Remove dados das quinzenas não marcadas e,
+   conforme as opções, fechamentos/extravios/ajustes. */
+function dadosPorPeriodo(){
+  const m=new Map(); // periodo -> {grupos, qtd, ext}
+  const get=p=>{ const o=m.get(p)||{grupos:0,qtd:0,ext:0}; m.set(p,o); return o; };
+  S.entregas.forEach(e=>{ const o=get(e.periodo||''); o.grupos++; o.qtd+=(parseNum(e.qtd)||0); });
+  S.extravios.forEach(x=>{ const o=get(x.periodo||''); o.ext++; });
   return m;
 }
 function renderLimpeza(){
   const box=$('#limpezaBox'); if(!box) return;
-  const porP=entregasPorPeriodo();
-  if(!S.entregas.length){
-    box.innerHTML=`<p class="panel-note" style="margin:0">Não há entregas importadas para limpar. ${S.fechamentos.length||S.extravios.length?'Você ainda pode apagar fechamentos/extravios abaixo.':''}</p>`;
-  }
+  const porP=dadosPorPeriodo();
   // ordena: períodos reais primeiro (mais recente em cima), "sem período" por último
   const chaves=[...porP.keys()].sort((a,b)=>{ if(a==='')return 1; if(b==='')return -1; return b.localeCompare(a); });
   const linhas = chaves.map(p=>{
@@ -558,20 +555,26 @@ function renderLimpeza(){
     const nome = p? esc(quinzenaLabel(p)) : '<i>Sem período identificado</i>';
     const periodo = p? `<span style="color:var(--text-faint);font-size:12px"> · ${esc(quinzenaPeriodo(p))}</span>`:'';
     const atual = (p===S.periodoSel)? ' <span class="badge green" style="font-size:10px">em uso</span>':'';
+    const det = [];
+    if(o.qtd) det.push(`${o.qtd.toLocaleString('pt-BR')} entrega(s) · ${o.grupos} grupo(s)`);
+    if(o.ext) det.push(`${o.ext} extravio(s)`);
+    if(!det.length) det.push('sem dados');
     return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;background:var(--surface)">
       <input type="checkbox" data-keep="${esc(p)}" style="width:18px;height:18px">
-      <span style="flex:1"><b>${nome}</b>${periodo}${atual}<br><span style="color:var(--text-faint);font-size:12px">${o.qtd.toLocaleString('pt-BR')} entrega(s) · ${o.grupos} grupo(s)</span></span>
+      <span style="flex:1"><b>${nome}</b>${periodo}${atual}<br><span style="color:var(--text-faint);font-size:12px">${det.join(' · ')}</span></span>
     </label>`;
   }).join('');
 
   box.innerHTML = `
-    ${chaves.length?`<div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--text-faint);text-transform:uppercase;margin-bottom:8px">Marque o que MANTER</div>${linhas}`:''}
+    ${chaves.length
+      ? `<div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--text-faint);text-transform:uppercase;margin-bottom:8px">Marque o que MANTER</div>${linhas}`
+      : `<p class="panel-note" style="margin:0 0 6px">Não há entregas nem extravios para limpar.</p>`}
     <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:6px;padding-top:12px;border-top:1px dashed var(--border)">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="limpFech" checked style="width:18px;height:18px"> Apagar <b>fechamentos salvos</b> (${S.fechamentos.length})</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="limpExt" checked style="width:18px;height:18px"> Apagar <b>extravios</b> (${S.extravios.length})</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer" title="Marcado: apaga TODOS os extravios, inclusive os da quinzena mantida. Desmarcado: mantém só os extravios das quinzenas marcadas acima."><input type="checkbox" id="limpExt" checked style="width:18px;height:18px"> Apagar <b>todos os extravios</b> (${S.extravios.length})</label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer" title="São ajustes por motorista (vales, adicionais, outros descontos). Como não são por quinzena, se mantidos passam a valer na quinzena que sobrar."><input type="checkbox" id="limpAjustes" checked style="width:18px;height:18px"> Apagar <b>ajustes manuais</b> (${Object.keys(S.ajustes||{}).length})</label>
     </div>
-    <p class="panel-note" style="margin-top:12px">Faturas não são guardadas no app — elas são geradas na hora a partir do fechamento, então somem junto quando os fechamentos forem apagados.</p>
+    <p class="panel-note" style="margin-top:12px">As quinzenas antigas que aparecem em <b>Fechamentos</b> e só têm extravios somem ao apagar os extravios. Faturas não são guardadas — somem junto com os fechamentos.</p>
     <div class="chips" style="margin-top:14px;gap:10px">
       <button class="btn secondary sm" id="btnBackupAntes">⬇️ Exportar backup antes</button>
       <button class="btn sm" id="btnAplicarLimpeza" style="background:var(--red);color:#fff">🧹 Aplicar limpeza</button>
@@ -581,17 +584,20 @@ function renderLimpeza(){
   $('#btnAplicarLimpeza').addEventListener('click',()=>{
     const manter=$$('#limpezaBox [data-keep]:checked').map(c=>c.dataset.keep);
     const apFech=$('#limpFech').checked, apExt=$('#limpExt').checked, apAj=$('#limpAjustes').checked;
-    if(S.entregas.length && !manter.length){ toast('Marque ao menos uma quinzena para manter','err'); return; }
-    // calcula o que será removido
+    const temDados = S.entregas.length || S.extravios.length;
+    if(temDados && !manter.length){ toast('Marque ao menos uma quinzena para manter','err'); return; }
+    // calcula o que será mantido/removido
     let remEnt=0, manEnt=0;
     S.entregas.forEach(e=>{ if(manter.includes(e.periodo||'')) manEnt+=(parseNum(e.qtd)||0); else remEnt+=(parseNum(e.qtd)||0); });
+    const extMantidos = apExt ? 0 : S.extravios.filter(x=>manter.includes(x.periodo||'')).length;
+    const extRemovidos = S.extravios.length - extMantidos;
     const manterLabels = manter.map(p=> p? quinzenaLabel(p):'Sem período').join(', ') || '—';
     modal(`<h3>Confirmar limpeza</h3>
       <p class="mh"><b>Mantém</b> todos os motoristas e regras (tarifas, cidades, apelidos).</p>
-      <p class="mh">Entregas mantidas: <b>${manEnt.toLocaleString('pt-BR')}</b> (${esc(manterLabels)})<br>
-        Entregas removidas: <b style="color:var(--red)">${remEnt.toLocaleString('pt-BR')}</b><br>
+      <p class="mh">Quinzena(s) mantida(s): <b>${esc(manterLabels)}</b><br>
+        Entregas mantidas: <b>${manEnt.toLocaleString('pt-BR')}</b> · removidas: <b style="color:var(--red)">${remEnt.toLocaleString('pt-BR')}</b><br>
+        Extravios mantidos: <b>${extMantidos}</b> · removidos: <b style="color:var(--red)">${extRemovidos}</b><br>
         ${apFech?`Fechamentos apagados: <b style="color:var(--red)">${S.fechamentos.length}</b><br>`:''}
-        ${apExt?`Extravios apagados: <b style="color:var(--red)">${S.extravios.length}</b><br>`:''}
         ${apAj?`Ajustes manuais apagados: <b style="color:var(--red)">${Object.keys(S.ajustes||{}).length}</b>`:''}</p>
       <p class="mh" style="color:var(--red)">Não dá para desfazer. Se ainda não exportou um backup, cancele e exporte antes.</p>
       <div class="modal-actions">
@@ -600,8 +606,9 @@ function renderLimpeza(){
       </div>`);
     $('#cfgLimp').onclick=()=>{
       S.entregas=S.entregas.filter(e=> manter.includes(e.periodo||''));
-      if(apFech) S.fechamentos=[];
       if(apExt) S.extravios=[];
+      else S.extravios=S.extravios.filter(x=> manter.includes(x.periodo||''));
+      if(apFech) S.fechamentos=[];
       if(apAj) S.ajustes={};
       if(S.periodoSel && !manter.includes(S.periodoSel)){ S.periodoSel=manter[0]||''; S.ref=S.periodoSel?quinzenaLabel(S.periodoSel):''; }
       save(); closeModal();
