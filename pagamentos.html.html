@@ -256,6 +256,13 @@
           </div>
           <p class="panel-note" style="margin-top:12px">⚠️ Provisório: cada pessoa fica com uma <b>cópia própria</b>. Se você importar mais relatórios depois, precisa exportar e reenviar o arquivo. Importar <b>substitui</b> os dados do navegador de quem recebe. A versão definitiva (nuvem) elimina esse vai-e-volta.</p>
         </div>
+        <div class="panel" style="margin-bottom:18px;border:1px solid var(--border)">
+          <div class="panel-head">
+            <div><div class="panel-title">🧹 Manutenção de dados</div><h3>Limpar quinzenas antigas</h3></div>
+          </div>
+          <p class="panel-note" style="margin-top:0">Mantém os <b>cadastros de motoristas</b> e <b>todas as regras</b> (tarifas, cidades, apelidos) — isso nunca é apagado. Marque a(s) quinzena(s) de <b>entregas</b> que quer <b>manter</b>; o resto é removido. Você ainda escolhe se apaga fechamentos, extravios e ajustes manuais.</p>
+          <div id="limpezaBox" style="margin-top:14px"></div>
+        </div>
         <div class="panel" style="margin-bottom:18px">
           <div class="panel-head">
             <div><div class="panel-title">🔄 Extravios automáticos</div><h3>Sincronizar do Google Sheets</h3></div>
@@ -525,6 +532,83 @@ function importData(file){
   };
   r.onerror = ()=> toast('Não foi possível ler o arquivo','err');
   r.readAsText(file);
+}
+
+/* ---------- manutenção: limpar quinzenas antigas ----------
+   Preserva sempre motoristas, regras, cidades e apelidos. Remove as entregas
+   das quinzenas não marcadas e, conforme as opções, fechamentos/extravios/ajustes. */
+function entregasPorPeriodo(){
+  const m=new Map(); // periodo -> {grupos, qtd}
+  S.entregas.forEach(e=>{
+    const p=e.periodo||'';
+    const o=m.get(p)||{grupos:0,qtd:0}; o.grupos++; o.qtd+=(parseNum(e.qtd)||0); m.set(p,o);
+  });
+  return m;
+}
+function renderLimpeza(){
+  const box=$('#limpezaBox'); if(!box) return;
+  const porP=entregasPorPeriodo();
+  if(!S.entregas.length){
+    box.innerHTML=`<p class="panel-note" style="margin:0">Não há entregas importadas para limpar. ${S.fechamentos.length||S.extravios.length?'Você ainda pode apagar fechamentos/extravios abaixo.':''}</p>`;
+  }
+  // ordena: períodos reais primeiro (mais recente em cima), "sem período" por último
+  const chaves=[...porP.keys()].sort((a,b)=>{ if(a==='')return 1; if(b==='')return -1; return b.localeCompare(a); });
+  const linhas = chaves.map(p=>{
+    const o=porP.get(p);
+    const nome = p? esc(quinzenaLabel(p)) : '<i>Sem período identificado</i>';
+    const periodo = p? `<span style="color:var(--text-faint);font-size:12px"> · ${esc(quinzenaPeriodo(p))}</span>`:'';
+    const atual = (p===S.periodoSel)? ' <span class="badge green" style="font-size:10px">em uso</span>':'';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;background:var(--surface)">
+      <input type="checkbox" data-keep="${esc(p)}" style="width:18px;height:18px">
+      <span style="flex:1"><b>${nome}</b>${periodo}${atual}<br><span style="color:var(--text-faint);font-size:12px">${o.qtd.toLocaleString('pt-BR')} entrega(s) · ${o.grupos} grupo(s)</span></span>
+    </label>`;
+  }).join('');
+
+  box.innerHTML = `
+    ${chaves.length?`<div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--text-faint);text-transform:uppercase;margin-bottom:8px">Marque o que MANTER</div>${linhas}`:''}
+    <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:6px;padding-top:12px;border-top:1px dashed var(--border)">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="limpFech" checked style="width:18px;height:18px"> Apagar <b>fechamentos salvos</b> (${S.fechamentos.length})</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="limpExt" checked style="width:18px;height:18px"> Apagar <b>extravios</b> (${S.extravios.length})</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer" title="São ajustes por motorista (vales, adicionais, outros descontos). Como não são por quinzena, se mantidos passam a valer na quinzena que sobrar."><input type="checkbox" id="limpAjustes" checked style="width:18px;height:18px"> Apagar <b>ajustes manuais</b> (${Object.keys(S.ajustes||{}).length})</label>
+    </div>
+    <p class="panel-note" style="margin-top:12px">Faturas não são guardadas no app — elas são geradas na hora a partir do fechamento, então somem junto quando os fechamentos forem apagados.</p>
+    <div class="chips" style="margin-top:14px;gap:10px">
+      <button class="btn secondary sm" id="btnBackupAntes">⬇️ Exportar backup antes</button>
+      <button class="btn sm" id="btnAplicarLimpeza" style="background:var(--red);color:#fff">🧹 Aplicar limpeza</button>
+    </div>`;
+
+  $('#btnBackupAntes').addEventListener('click',exportData);
+  $('#btnAplicarLimpeza').addEventListener('click',()=>{
+    const manter=$$('#limpezaBox [data-keep]:checked').map(c=>c.dataset.keep);
+    const apFech=$('#limpFech').checked, apExt=$('#limpExt').checked, apAj=$('#limpAjustes').checked;
+    if(S.entregas.length && !manter.length){ toast('Marque ao menos uma quinzena para manter','err'); return; }
+    // calcula o que será removido
+    let remEnt=0, manEnt=0;
+    S.entregas.forEach(e=>{ if(manter.includes(e.periodo||'')) manEnt+=(parseNum(e.qtd)||0); else remEnt+=(parseNum(e.qtd)||0); });
+    const manterLabels = manter.map(p=> p? quinzenaLabel(p):'Sem período').join(', ') || '—';
+    modal(`<h3>Confirmar limpeza</h3>
+      <p class="mh"><b>Mantém</b> todos os motoristas e regras (tarifas, cidades, apelidos).</p>
+      <p class="mh">Entregas mantidas: <b>${manEnt.toLocaleString('pt-BR')}</b> (${esc(manterLabels)})<br>
+        Entregas removidas: <b style="color:var(--red)">${remEnt.toLocaleString('pt-BR')}</b><br>
+        ${apFech?`Fechamentos apagados: <b style="color:var(--red)">${S.fechamentos.length}</b><br>`:''}
+        ${apExt?`Extravios apagados: <b style="color:var(--red)">${S.extravios.length}</b><br>`:''}
+        ${apAj?`Ajustes manuais apagados: <b style="color:var(--red)">${Object.keys(S.ajustes||{}).length}</b>`:''}</p>
+      <p class="mh" style="color:var(--red)">Não dá para desfazer. Se ainda não exportou um backup, cancele e exporte antes.</p>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
+        <button class="btn sm" id="cfgLimp" style="background:var(--red);color:#fff">Apagar definitivamente</button>
+      </div>`);
+    $('#cfgLimp').onclick=()=>{
+      S.entregas=S.entregas.filter(e=> manter.includes(e.periodo||''));
+      if(apFech) S.fechamentos=[];
+      if(apExt) S.extravios=[];
+      if(apAj) S.ajustes={};
+      if(S.periodoSel && !manter.includes(S.periodoSel)){ S.periodoSel=manter[0]||''; S.ref=S.periodoSel?quinzenaLabel(S.periodoSel):''; }
+      save(); closeModal();
+      renderLimpeza(); renderImportCards(); refreshPeriodoSelector(); renderFech(); renderDrivers(); renderExtSyncInfo();
+      toast('Limpeza concluída · '+manEnt.toLocaleString('pt-BR')+' entrega(s) mantida(s)','ok');
+    };
+  });
 }
 const uid = ()=> Math.random().toString(36).slice(2,10);
 
@@ -2122,7 +2206,7 @@ function showPage(p){
   $$('.page').forEach(s=> s.classList.toggle('active', s.id==='page-'+p));
   $$('.nav-btn').forEach(b=> b.classList.toggle('active', b.dataset.page===p));
   if(p==='fechamentos'){ refreshPeriodoSelector(); renderFech(); }
-  if(p==='importar') renderImportCards();
+  if(p==='importar'){ renderImportCards(); renderLimpeza(); }
   if(p==='motoristas') renderDrivers();
   if(p==='regras') loadRulesForm();
   if(p==='historico') renderHist();
