@@ -256,13 +256,6 @@
           </div>
           <p class="panel-note" style="margin-top:12px">⚠️ Provisório: cada pessoa fica com uma <b>cópia própria</b>. Se você importar mais relatórios depois, precisa exportar e reenviar o arquivo. Importar <b>substitui</b> os dados do navegador de quem recebe. A versão definitiva (nuvem) elimina esse vai-e-volta.</p>
         </div>
-        <div class="panel" style="margin-bottom:18px;border:1px solid var(--border)">
-          <div class="panel-head">
-            <div><div class="panel-title">🧹 Manutenção de dados</div><h3>Limpar quinzenas antigas</h3></div>
-          </div>
-          <p class="panel-note" style="margin-top:0">Mantém os <b>cadastros de motoristas</b> e <b>todas as regras</b> (tarifas, cidades, apelidos) — isso nunca é apagado. Marque a(s) quinzena(s) de <b>entregas</b> que quer <b>manter</b>; o resto é removido. Você ainda escolhe se apaga fechamentos, extravios e ajustes manuais.</p>
-          <div id="limpezaBox" style="margin-top:14px"></div>
-        </div>
         <div class="panel" style="margin-bottom:18px">
           <div class="panel-head">
             <div><div class="panel-title">🔄 Extravios automáticos</div><h3>Sincronizar do Google Sheets</h3></div>
@@ -532,90 +525,6 @@ function importData(file){
   };
   r.onerror = ()=> toast('Não foi possível ler o arquivo','err');
   r.readAsText(file);
-}
-
-/* ---------- manutenção: limpar quinzenas antigas ----------
-   Preserva sempre motoristas, regras, cidades e apelidos. Considera entregas
-   E extravios ao listar as quinzenas. Remove dados das quinzenas não marcadas e,
-   conforme as opções, fechamentos/extravios/ajustes. */
-function dadosPorPeriodo(){
-  const m=new Map(); // periodo -> {grupos, qtd, ext}
-  const get=p=>{ const o=m.get(p)||{grupos:0,qtd:0,ext:0}; m.set(p,o); return o; };
-  S.entregas.forEach(e=>{ const o=get(e.periodo||''); o.grupos++; o.qtd+=(parseNum(e.qtd)||0); });
-  S.extravios.forEach(x=>{ const o=get(x.periodo||''); o.ext++; });
-  return m;
-}
-function renderLimpeza(){
-  const box=$('#limpezaBox'); if(!box) return;
-  const porP=dadosPorPeriodo();
-  // ordena: períodos reais primeiro (mais recente em cima), "sem período" por último
-  const chaves=[...porP.keys()].sort((a,b)=>{ if(a==='')return 1; if(b==='')return -1; return b.localeCompare(a); });
-  const linhas = chaves.map(p=>{
-    const o=porP.get(p);
-    const nome = p? esc(quinzenaLabel(p)) : '<i>Sem período identificado</i>';
-    const periodo = p? `<span style="color:var(--text-faint);font-size:12px"> · ${esc(quinzenaPeriodo(p))}</span>`:'';
-    const atual = (p===S.periodoSel)? ' <span class="badge green" style="font-size:10px">em uso</span>':'';
-    const det = [];
-    if(o.qtd) det.push(`${o.qtd.toLocaleString('pt-BR')} entrega(s) · ${o.grupos} grupo(s)`);
-    if(o.ext) det.push(`${o.ext} extravio(s)`);
-    if(!det.length) det.push('sem dados');
-    return `<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;background:var(--surface)">
-      <input type="checkbox" data-keep="${esc(p)}" style="width:18px;height:18px">
-      <span style="flex:1"><b>${nome}</b>${periodo}${atual}<br><span style="color:var(--text-faint);font-size:12px">${det.join(' · ')}</span></span>
-    </label>`;
-  }).join('');
-
-  box.innerHTML = `
-    ${chaves.length
-      ? `<div style="font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--text-faint);text-transform:uppercase;margin-bottom:8px">Marque o que MANTER</div>${linhas}`
-      : `<p class="panel-note" style="margin:0 0 6px">Não há entregas nem extravios para limpar.</p>`}
-    <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:6px;padding-top:12px;border-top:1px dashed var(--border)">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="limpFech" checked style="width:18px;height:18px"> Apagar <b>fechamentos salvos</b> (${S.fechamentos.length})</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer" title="Marcado: apaga TODOS os extravios, inclusive os da quinzena mantida. Desmarcado: mantém só os extravios das quinzenas marcadas acima."><input type="checkbox" id="limpExt" checked style="width:18px;height:18px"> Apagar <b>todos os extravios</b> (${S.extravios.length})</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer" title="São ajustes por motorista (vales, adicionais, outros descontos). Como não são por quinzena, se mantidos passam a valer na quinzena que sobrar."><input type="checkbox" id="limpAjustes" checked style="width:18px;height:18px"> Apagar <b>ajustes manuais</b> (${Object.keys(S.ajustes||{}).length})</label>
-    </div>
-    <p class="panel-note" style="margin-top:12px">As quinzenas antigas que aparecem em <b>Fechamentos</b> e só têm extravios somem ao apagar os extravios. Faturas não são guardadas — somem junto com os fechamentos.</p>
-    <div class="chips" style="margin-top:14px;gap:10px">
-      <button class="btn secondary sm" id="btnBackupAntes">⬇️ Exportar backup antes</button>
-      <button class="btn sm" id="btnAplicarLimpeza" style="background:var(--red);color:#fff">🧹 Aplicar limpeza</button>
-    </div>`;
-
-  $('#btnBackupAntes').addEventListener('click',exportData);
-  $('#btnAplicarLimpeza').addEventListener('click',()=>{
-    const manter=$$('#limpezaBox [data-keep]:checked').map(c=>c.dataset.keep);
-    const apFech=$('#limpFech').checked, apExt=$('#limpExt').checked, apAj=$('#limpAjustes').checked;
-    const temDados = S.entregas.length || S.extravios.length;
-    if(temDados && !manter.length){ toast('Marque ao menos uma quinzena para manter','err'); return; }
-    // calcula o que será mantido/removido
-    let remEnt=0, manEnt=0;
-    S.entregas.forEach(e=>{ if(manter.includes(e.periodo||'')) manEnt+=(parseNum(e.qtd)||0); else remEnt+=(parseNum(e.qtd)||0); });
-    const extMantidos = apExt ? 0 : S.extravios.filter(x=>manter.includes(x.periodo||'')).length;
-    const extRemovidos = S.extravios.length - extMantidos;
-    const manterLabels = manter.map(p=> p? quinzenaLabel(p):'Sem período').join(', ') || '—';
-    modal(`<h3>Confirmar limpeza</h3>
-      <p class="mh"><b>Mantém</b> todos os motoristas e regras (tarifas, cidades, apelidos).</p>
-      <p class="mh">Quinzena(s) mantida(s): <b>${esc(manterLabels)}</b><br>
-        Entregas mantidas: <b>${manEnt.toLocaleString('pt-BR')}</b> · removidas: <b style="color:var(--red)">${remEnt.toLocaleString('pt-BR')}</b><br>
-        Extravios mantidos: <b>${extMantidos}</b> · removidos: <b style="color:var(--red)">${extRemovidos}</b><br>
-        ${apFech?`Fechamentos apagados: <b style="color:var(--red)">${S.fechamentos.length}</b><br>`:''}
-        ${apAj?`Ajustes manuais apagados: <b style="color:var(--red)">${Object.keys(S.ajustes||{}).length}</b>`:''}</p>
-      <p class="mh" style="color:var(--red)">Não dá para desfazer. Se ainda não exportou um backup, cancele e exporte antes.</p>
-      <div class="modal-actions">
-        <button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
-        <button class="btn sm" id="cfgLimp" style="background:var(--red);color:#fff">Apagar definitivamente</button>
-      </div>`);
-    $('#cfgLimp').onclick=()=>{
-      S.entregas=S.entregas.filter(e=> manter.includes(e.periodo||''));
-      if(apExt) S.extravios=[];
-      else S.extravios=S.extravios.filter(x=> manter.includes(x.periodo||''));
-      if(apFech) S.fechamentos=[];
-      if(apAj) S.ajustes={};
-      if(S.periodoSel && !manter.includes(S.periodoSel)){ S.periodoSel=manter[0]||''; S.ref=S.periodoSel?quinzenaLabel(S.periodoSel):''; }
-      save(); closeModal();
-      renderLimpeza(); renderImportCards(); refreshPeriodoSelector(); renderFech(); renderDrivers(); renderExtSyncInfo();
-      toast('Limpeza concluída · '+manEnt.toLocaleString('pt-BR')+' entrega(s) mantida(s)','ok');
-    };
-  });
 }
 const uid = ()=> Math.random().toString(36).slice(2,10);
 
@@ -1525,7 +1434,8 @@ function applyExtraviosSheet(headers, body){
             dDesc:col('DATA DESCONTO'), dCad:col('DATA CADASTRO'),
             cidade:col('CIDADE'), tel:col('TEL') };
   const cf=S.config;
-  const novos=[]; let total=0;
+  const alvo = S.periodoSel || '';   // quinzena correspondente (a selecionada em Fechamentos)
+  const novos=[]; let total=0, foraPeriodo=0;
   body.forEach(r=>{
     const empN=norm(r[c.emp]);
     const empresa=/IMILE/.test(empN)?'iMile':(/J\s*T/.test(empN)?'J&T':'');
@@ -1545,14 +1455,22 @@ function applyExtraviosSheet(headers, body){
     const valor = cf.extValor==='multa'?multa : cf.extValor==='produto'?prod : exposicao;
     // a quinzena do fechamento vem do calendário de pagamento (DATA DESCONTO = data de pagamento)
     const periodo = cf.extVinculo==='direto' ? quinzenaFromDate(dataDesc) : quinzenaFromPagamento(dataDesc);
+    // traz SOMENTE os extravios da quinzena correspondente (a selecionada). Em "Todos os
+    // períodos" (alvo vazio) não filtra, traz todos.
+    if(alvo && periodo!==alvo){ foraPeriodo++; return; }
     novos.push({ id:uid(), pedido:(''+(r[c.pedido]||'')).trim()||'—', motorista:ent, empresa, valor,
       data:dataDesc, pagamentoEm:dataDesc, periodo, valorProd:prod, multa, exposicao,
       status:(''+(r[c.status]||'')).trim(), responsavel:(''+(r[c.resp]||'')).trim(),
       cidade:c.cidade>-1?(''+(r[c.cidade]||'')).trim():'', src:'gsheet' });
   });
-  // substitui apenas os extravios vindos da planilha (preserva os importados manualmente)
-  S.extravios = S.extravios.filter(x=> x.src!=='gsheet').concat(novos);
-  return {novos:novos.length, total};
+  // substitui apenas os extravios da planilha DA QUINZENA ALVO (preserva os manuais e os
+  // de outras quinzenas já lançados). Em "Todos", substitui todos os da planilha.
+  if(alvo){
+    S.extravios = S.extravios.filter(x=> x.src!=='gsheet' || (x.periodo||'')!==alvo).concat(novos);
+  }else{
+    S.extravios = S.extravios.filter(x=> x.src!=='gsheet').concat(novos);
+  }
+  return {novos:novos.length, total, foraPeriodo, alvo};
 }
 async function syncExtravios(silent){
   const candidates=gsheetCsvCandidates(S.config.gsheetUrl);
@@ -1576,10 +1494,13 @@ async function syncExtravios(silent){
     const hi=pickHeaderRow(rows);
     const headers=rows[hi].map(h=>(''+h).trim());
     const body=rows.slice(hi+1);
-    const {novos,total}=applyExtraviosSheet(headers,body);
+    const {novos,total,foraPeriodo,alvo}=applyExtraviosSheet(headers,body);
     S.config.lastSync=new Date().toISOString(); S.config.lastSyncErr='';
     save(); renderImportCards(); refreshPeriodoSelector(); renderFech(); renderExtSyncInfo();
-    if(!silent) toast(novos+' extravios lançados (de '+total+' linhas da planilha)','ok');
+    if(!silent){
+      const extra = alvo ? ` · ${foraPeriodo} de outras quinzenas ignorado(s)` : '';
+      toast(novos+' extravios da '+(alvo?quinzenaLabel(alvo):'planilha')+' lançados (de '+total+' linhas)'+extra,'ok');
+    }
   }catch(e){
     S.config.lastSyncErr = (lastErr==='login') ? 'A planilha não está pública (veio tela de login).'
       : 'Não foi possível acessar (possível bloqueio de arquivo local file:// ou CORS).';
@@ -1705,6 +1626,16 @@ function doImport(k,cfg,sel,body){
   let added=0, totalQ=0, volsIgnorados=0;
   if(cfg.tipo==='entregas'){
     if(sel.motorista<0){ toast('Selecione a coluna de motorista','err'); return; }
+    // PROTEÇÃO: se a coluna de Quantidade foi apontada para números gigantes (ex.: waybill/ID
+    // do pedido), os totais corrompem. Relatórios J&T/iMile não têm quantidade (1 linha = 1 entrega).
+    if(sel.qtd>-1){
+      let maxLinha=0, exemplo='';
+      for(const r of body){ const q=parseNum(r[sel.qtd])||0; if(q>maxLinha){ maxLinha=q; exemplo=(''+(r[sel.qtd]==null?'':r[sel.qtd])); } }
+      if(maxLinha>100000){
+        toast('A coluna de Quantidade aponta para valores enormes (ex.: '+exemplo.slice(0,24)+'). Isso costuma ser a coluna de waybill/ID. Para J&T e iMile, deixe Quantidade como "— não usar —" (cada linha conta como 1 entrega).','err');
+        return;
+      }
+    }
     const fallbackP = sel.periodoFallback || '';
     // agrega por motorista × empresa × dia × cidade × período
     const groups=new Map();
@@ -2213,7 +2144,7 @@ function showPage(p){
   $$('.page').forEach(s=> s.classList.toggle('active', s.id==='page-'+p));
   $$('.nav-btn').forEach(b=> b.classList.toggle('active', b.dataset.page===p));
   if(p==='fechamentos'){ refreshPeriodoSelector(); renderFech(); }
-  if(p==='importar'){ renderImportCards(); renderLimpeza(); }
+  if(p==='importar') renderImportCards();
   if(p==='motoristas') renderDrivers();
   if(p==='regras') loadRulesForm();
   if(p==='historico') renderHist();
