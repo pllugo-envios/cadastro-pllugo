@@ -132,6 +132,8 @@
     .pay-cell.liquido.neg .val{color:var(--red)}
     .pay-cell.bonus-cell{background:#F5F3FF;border-color:#DDD6FE}
     .pay-cell.bonus-cell .val{color:#7C3AED;font-weight:800;font-size:18px}
+    .pay-cell.calc-cell{background:var(--surface-2,#F7F7F9)}
+    .pay-cell.calc-cell .val{font-weight:800;font-size:18px}
     /* extravios identificados por empresa */
     .ext-group{margin-top:10px}
     .ext-group .ext-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
@@ -570,6 +572,15 @@ function migrarEstado(){
     S.config.oxpayMigrado=true; mudou=true;
   }
   if(!S.statusPag) { S.statusPag={}; mudou=true; }
+  // 3) limpa "valor bruto" congelado de ajustes antigos — o bruto agora é sempre
+  //    recalculado das entregas; ajustes manuais guardam só extravio/vales/adicional/outros.
+  if(S.ajustes && typeof S.ajustes==='object'){
+    Object.keys(S.ajustes).forEach(k=>{
+      const a=S.ajustes[k];
+      if(a && typeof a==='object' && ('bruto' in a)){ delete a.bruto; mudou=true; }
+      if(a && typeof a==='object' && Object.keys(a).length===0){ delete S.ajustes[k]; mudou=true; }
+    });
+  }
   if(mudou) save();
 }
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){ toast('Erro ao salvar (armazenamento cheio?)','err'); } }
@@ -935,9 +946,13 @@ function computeFechamentos(){
   // aplica overrides salvos
   const arr = Object.values(map).map(o=>{
     const ov = S.ajustes[o.key] || {};
-    const bruto = ov.bruto!=null ? parseNum(ov.bruto) : o.valorBrutoCalc;
-    const extravio = ov.extravio!=null ? parseNum(ov.extravio)
-                     : (S.config.descAuto ? o.extravioValorCalc : 0);
+    // Valor bruto: SEMPRE recalculado das entregas × tarifa (nunca congelado por edições
+    // manuais de outros campos — assim reimportar relatórios sempre atualiza o bruto).
+    const bruto = o.valorBrutoCalc;
+    // Extravios: com desconto automático ligado, segue sempre o cálculo dos extravios;
+    // desligado, usa o valor manual (se houver).
+    const extravio = S.config.descAuto ? o.extravioValorCalc
+                     : (ov.extravio!=null ? parseNum(ov.extravio) : 0);
     const vales = ov.vales!=null ? parseNum(ov.vales) : 0;
     const adicional = ov.adicional!=null ? parseNum(ov.adicional) : 0;
     const outros = ov.outros!=null ? parseNum(ov.outros) : 0;
@@ -1088,10 +1103,12 @@ function driverCard(d){
     ${d.origem? `<div style="font-size:12px;color:var(--text-faint);margin:-4px 0 10px">Atuação por entregas: ${regiaoBreakdown(d.regioes)}</div>`:''}
 
     <div class="pay-grid">
-      <div class="pay-cell"><label>Valor bruto (entregas)</label><input data-f="bruto" inputmode="decimal" value="${d.bruto.toFixed(2).replace('.',',')}"></div>
+      <div class="pay-cell calc-cell"><label>Valor bruto (entregas)</label><div class="val" title="${d.jt+d.imile} entregas — calculado automaticamente">${fmtBRL(d.bruto)}</div></div>
       ${d.bonus?`<div class="pay-cell bonus-cell"><label>Bônus domingos/feriados (+)</label><div class="val">+${fmtBRL(d.bonus)}</div></div>`:''}
       <div class="pay-cell"><label>Adicional de rota (+)</label><input data-f="adicional" inputmode="decimal" value="${d.adicional.toFixed(2).replace('.',',')}"></div>
-      <div class="pay-cell"><label>Extravios (−)</label><input data-f="extravio" inputmode="decimal" value="${d.extravio.toFixed(2).replace('.',',')}"></div>
+      ${S.config.descAuto
+        ? `<div class="pay-cell calc-cell"><label>Extravios (−)</label><div class="val" style="color:var(--red)">-${fmtBRL(d.extravio)}</div></div>`
+        : `<div class="pay-cell"><label>Extravios (−)</label><input data-f="extravio" inputmode="decimal" value="${d.extravio.toFixed(2).replace('.',',')}"></div>`}
       <div class="pay-cell"><label>Vales (−)</label><input data-f="vales" inputmode="decimal" value="${d.vales.toFixed(2).replace('.',',')}"></div>
       <div class="pay-cell"><label>Outros descontos (−)</label><input data-f="outros" inputmode="decimal" value="${d.outros.toFixed(2).replace('.',',')}"></div>
       <div class="pay-cell liquido${neg?' neg':''}" data-liquido-cell><label>Líquido a receber${neg?' <span style="color:var(--red)">(negativo)</span>':''}</label><div class="val" data-liquido>${fmtBRL(d.liquido)}</div></div>
@@ -1119,11 +1136,12 @@ function driverCard(d){
       <button class="btn secondary" data-act="salvar">💾 Salvar fechamento</button>
     </div>`;
 
-  // recalcula líquido ao editar
+  // recalcula líquido ao editar (campos manuais). Bruto e bônus são sempre calculados.
   function recalc(){
-    const get=f=> parseNum($(`[data-f="${f}"]`,card).value);
-    const bruto=get('bruto'),adicional=get('adicional'),extravio=get('extravio'),vales=get('vales'),outros=get('outros');
-    const bonus=d.bonus||0;
+    const getF=f=>{ const el=$(`[data-f="${f}"]`,card); return el?parseNum(el.value):0; };
+    const adicional=getF('adicional'), vales=getF('vales'), outros=getF('outros');
+    const extravio = S.config.descAuto ? (d.extravio||0) : getF('extravio');
+    const bruto=d.bruto||0, bonus=d.bonus||0;
     const liq = bruto+bonus+adicional-extravio-vales-outros;
     $('[data-liquido]',card).textContent = fmtBRL(liq);
     const cell=$('[data-liquido-cell]',card);
@@ -1132,9 +1150,15 @@ function driverCard(d){
       const lbl=$('label',cell);
       if(lbl) lbl.innerHTML = 'Líquido a receber'+(liq<0?' <span style="color:var(--red)">(negativo)</span>':'');
     }
-    S.ajustes[d.key]={bruto,extravio,vales,adicional,outros};
+    // salva apenas os ajustes manuais — NUNCA o bruto (que sempre vem do cálculo)
+    const ov={};
+    if(!S.config.descAuto && Math.abs(extravio)>0.005) ov.extravio=extravio;
+    if(Math.abs(vales)>0.005) ov.vales=vales;
+    if(Math.abs(adicional)>0.005) ov.adicional=adicional;
+    if(Math.abs(outros)>0.005) ov.outros=outros;
+    if(Object.keys(ov).length) S.ajustes[d.key]=ov; else delete S.ajustes[d.key];
     save();
-    d.bruto=bruto;d.adicional=adicional;d.extravio=extravio;d.vales=vales;d.outros=outros;d.liquido=liq;
+    d.adicional=adicional;d.extravio=extravio;d.vales=vales;d.outros=outros;d.liquido=liq;
   }
   $$('[data-f]',card).forEach(i=> i.addEventListener('input',recalc));
 
