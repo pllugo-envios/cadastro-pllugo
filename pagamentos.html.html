@@ -471,6 +471,18 @@
           </div>
           <p class="panel-note" style="margin-top:12px">Ex.: <b>Rio Grande da Serra → 3,50</b>. A cidade da entrega vem do relatório; quando não houver, usa a cidade padrão cadastrada no motorista.</p>
         </div>
+        <div class="panel" style="margin-top:18px;border:1px solid #FECACA;background:var(--brand-soft)">
+          <div class="panel-head">
+            <div><div class="panel-title" style="color:var(--red)">🧹 Manutenção</div><h3>Limpar fechamentos e movimentações</h3></div>
+          </div>
+          <p class="panel-note" style="margin-top:0">Remove os dados de <b>movimentação</b> que poluem a tela, começando do zero para uma nova rodada de importações. São apagados: <b>entregas/fechamentos</b>, <b>extravios</b>, <b>vales e ajustes manuais</b>, <b>histórico de fechamentos</b> e <b>status (pago/pendente)</b>.</p>
+          <p class="panel-note" style="margin-top:8px">São <b>preservados</b>: cadastros de motoristas (telefone, CNPJ, OXpay, apelidos), tarifas (base, por cidade e por motorista), cidades e todas as regras. </p>
+          <div class="chips" style="margin-top:12px;gap:10px">
+            <button class="btn primary sm" id="btnBackupAntesLimpar">⬇️ Exportar backup antes</button>
+            <button class="btn sm" id="btnLimparMov" style="background:var(--red);color:#fff">🗑️ Limpar movimentações</button>
+          </div>
+          <p class="panel-note" style="margin-top:12px">⚠️ A limpeza é <b>permanente</b> neste navegador e não pode ser desfeita. Recomendamos exportar um backup antes.</p>
+        </div>
         <div class="footer">Lembre de clicar em <b>Salvar regras</b> e depois <b>Recalcular</b> nos fechamentos.</div>
       </section>
 
@@ -627,6 +639,48 @@ function importData(file){
   };
   r.onerror = ()=> toast('Não foi possível ler o arquivo','err');
   r.readAsText(file);
+}
+
+/* ---------- limpeza de movimentações ----------
+   Zera os dados operacionais (entregas, extravios, ajustes manuais, histórico e
+   status) preservando cadastros de motoristas, tarifas, cidades e todas as regras. */
+function limparMovimentacoes(){
+  const nEnt=(S.entregas||[]).length, nExt=(S.extravios||[]).length,
+        nFec=(S.fechamentos||[]).length, nAj=Object.keys(S.ajustes||{}).length,
+        nSt=Object.keys(S.statusPag||{}).length;
+  modal(`<h3>Limpar movimentações</h3>
+    <p class="mh">Serão <b>apagados definitivamente</b> deste navegador:</p>
+    <ul style="margin:6px 0 10px 18px;font-size:13.5px;line-height:1.7;color:var(--text)">
+      <li><b>${nEnt}</b> registro(s) de entregas/fechamentos</li>
+      <li><b>${nExt}</b> extravio(s)</li>
+      <li><b>${nAj}</b> ajuste(s) manual(is) (vales, adicionais, outros)</li>
+      <li><b>${nFec}</b> fechamento(s) no histórico</li>
+      <li><b>${nSt}</b> marcação(ões) de status (pago/pendente)</li>
+    </ul>
+    <p class="mh" style="color:var(--green);font-weight:600">Serão mantidos: motoristas, tarifas, cidades e todas as regras.</p>
+    <p class="mh" style="color:var(--red)">Esta ação não pode ser desfeita. Exporte um backup antes se tiver dúvida.</p>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
+      <button class="btn" id="cfgLimparMov" style="background:var(--red);color:#fff">🗑️ Apagar movimentações</button>
+    </div>`);
+  $('#cfgLimparMov').onclick=()=>{
+    S.entregas=[];
+    S.extravios=[];
+    S.ajustes={};
+    S.fechamentos=[];
+    S.statusPag={};
+    S.filtroOrigem=''; S.filtroStatus=''; S.filtroOxpay='';
+    S.periodoSel=''; S.ref='';
+    S.lastSync=''; S.lastSyncErr='';
+    save(); closeModal();
+    if(typeof renderFech==='function') renderFech();
+    if(typeof renderImportCards==='function') renderImportCards();
+    if(typeof renderDrivers==='function') renderDrivers();
+    if(typeof renderHist==='function') renderHist();
+    if(typeof refreshPeriodoSelector==='function') refreshPeriodoSelector();
+    if(typeof renderExtSyncInfo==='function') renderExtSyncInfo();
+    toast('Movimentações apagadas — cadastros e regras preservados','ok');
+  };
 }
 const uid = ()=> Math.random().toString(36).slice(2,10);
 
@@ -2495,6 +2549,8 @@ function bind(){
   if($('#btnExportData')) $('#btnExportData').addEventListener('click',exportData);
   if($('#btnImportData')) $('#btnImportData').addEventListener('click',()=>$('#fileImportData').click());
   if($('#fileImportData')) $('#fileImportData').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=''; });
+  if($('#btnBackupAntesLimpar')) $('#btnBackupAntesLimpar').addEventListener('click',exportData);
+  if($('#btnLimparMov')) $('#btnLimparMov').addEventListener('click',limparMovimentacoes);
   $('#searchDriver').addEventListener('input',renderDrivers);
   ['fltCidade','fltOrigem','fltTarifa'].forEach(id=>{ const e=$('#'+id); if(e) e.addEventListener('change',renderDrivers); });
   if($('#btnLimparFlt')) $('#btnLimparFlt').addEventListener('click',()=>{
