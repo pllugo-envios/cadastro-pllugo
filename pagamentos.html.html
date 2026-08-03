@@ -159,6 +159,7 @@
     .status-btn{border:1px solid var(--border);background:var(--surface);color:var(--text-faint);font-weight:800}
     .status-btn.on-pago{background:var(--green);color:#fff;border-color:var(--green)}
     .status-btn.on-pendente{background:var(--yellow);color:#fff;border-color:var(--yellow)}
+    .status-btn.on-sem{background:#6B7280;color:#fff;border-color:#6B7280}
     .pay-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
     .extravio-list{margin-top:14px;background:var(--red-soft);border:1px solid #FECACA;border-radius:14px;padding:12px 14px}
     .extravio-list .et-head{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--red);margin-bottom:8px}
@@ -255,6 +256,7 @@
               <option value="">Todos</option>
               <option value="pago">Pagos</option>
               <option value="pendente">Pendentes</option>
+                <option value="sem">Sem Status</option>
             </select>
           </div>
           <div>
@@ -281,9 +283,10 @@
         <div class="section-title">
           <div>
             <h2>Importar relatórios</h2>
-            <p>Importe os relatórios da J&amp;T e da iMile (entregas), o <b>Controle de Tickets</b> (cadastra motoristas com telefone e região pela cidade de destino), extravios e a base de telefones. Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. Nas entregas, a ferramenta detecta a <b>quinzena</b> (01–15 ou 16–fim do mês) e registra cada entrega no período certo.</p>
+            <p>Importe os relatórios da J&amp;T e da iMile (entregas). Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. Nas entregas, a ferramenta detecta a <b>quinzena</b> (01-15 ou 16-fim do mês) e registra cada entrega no período certo.</p>
           </div>
         </div>
+        <div id="ultImportBox" style="display:none"></div>
         <div class="panel" style="margin-bottom:18px;border:1px solid #FECACA;background:var(--brand-soft)">
           <div class="panel-head">
             <div><div class="panel-title">📦 Backup e transferência</div><h3>Compartilhar os dados com o time</h3></div>
@@ -475,6 +478,7 @@
           <div class="panel-head">
             <div><div class="panel-title" style="color:var(--red)">🧹 Manutenção</div><h3>Limpar fechamentos e movimentações</h3></div>
           </div>
+          <div id="storageBox" style="margin-bottom:14px"></div>
           <p class="panel-note" style="margin-top:0">Remove os dados de <b>movimentação</b> que poluem a tela, começando do zero para uma nova rodada de importações. São apagados: <b>entregas/fechamentos</b>, <b>extravios</b>, <b>vales e ajustes manuais</b>, <b>histórico de fechamentos</b> e <b>status (pago/pendente)</b>.</p>
           <p class="panel-note" style="margin-top:8px">São <b>preservados</b>: cadastros de motoristas (telefone, CNPJ, OXpay, apelidos), tarifas (base, por cidade e por motorista), cidades e todas as regras. </p>
           <div class="chips" style="margin-top:12px;gap:10px">
@@ -517,6 +521,8 @@
 'use strict';
 
 const LS_KEY = 'pllugoPagamentosV1';
+const LS_VER = 2;                      // versão do formato compactado no localStorage
+const LS_LIMITE = 5 * 1024 * 1024;     // cota típica do navegador por site
 const BRL = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
 const fmtBRL = n => BRL.format(isFinite(n)?n:0);
 
@@ -543,20 +549,143 @@ const DEFAULT_STATE = {
   ajustes:{},            // por chave norm(motorista): {bruto,extravio,vales,adicional,outros} (overrides)
   statusPag:{},          // status de pagamento por 'periodo\u0001key': 'pago' | 'pendente'
   fechamentos:[],        // salvos
+  imports:[],            // assinaturas dos relatórios já importados (evita reimportação)
+  ultimoImport:null,     // delta da última importação (permite desfazer)
   ref:'',
   periodoSel:'',         // período selecionado: 'AAAA-MM-Q' (quinzena), 'M:AAAA-MM' (mês) ou '' (todos)
   filtroOrigem:'',       // filtro de origem nos fechamentos (clicar no resumo por região)
   filtroOxpay:'',        // '', 'com' (só quem tem OXpay) ou 'sem' (só quem não tem)
-  filtroStatus:''        // '', 'pago' ou 'pendente'
+  filtroStatus:''        // '', 'pago', 'pendente' ou 'sem'
 };
 let S = load();
 migrarEstado();
 
+/* ---------- compactação do armazenamento (formato v2) ----------
+   O gargalo é S.entregas/S.extravios: milhares de objetos repetindo os mesmos nomes de
+   campo e os mesmos textos (motorista, cidade, empresa, data). Gravamos essas listas em
+   formato colunar com uma tabela de strings compartilhada, então cada registro vira uma
+   linha de números. Reduz o tamanho no localStorage em ~5x sem mudar nada em memória —
+   o estado continua sendo objetos normais durante o uso. Formato antigo (sem "v") ainda
+   é lido normalmente, então nenhum dado existente se perde. */
+function _packRows(rows, intern, omit){
+  const keys=[], kset=new Set();
+  rows.forEach(o=> Object.keys(o).forEach(k=>{ if(!kset.has(k) && !(omit&&omit.has(k))){ kset.add(k); keys.push(k); } }));
+  // uma coluna só entra na tabela de strings se for 100% texto E tiver repetição
+  // (ids são únicos: interná-los não economizaria nada).
+  const strCol = keys.map(k=>{
+    let temStr=false, distinct=new Set();
+    for(const o of rows){
+      const v=o[k];
+      if(v==null) continue;
+      if(typeof v!=='string') return false;
+      temStr=true; distinct.add(v);
+      if(distinct.size > rows.length/2) return false;
+    }
+    return temStr;
+  });
+  const r=rows.map(o=> keys.map((k,j)=>{
+    const v=o[k];
+    if(strCol[j]) return (v==null||v==='') ? -1 : intern(v);
+    return v===undefined ? null : v;
+  }));
+  return {k:keys, s:strCol, r};
+}
+function _unpackRows(p, tab){
+  if(!p || !Array.isArray(p.r)) return [];
+  return p.r.map(row=>{
+    const o={};
+    p.k.forEach((k,j)=>{
+      const v=row[j];
+      o[k] = p.s[j] ? (v===-1||v==null ? '' : (tab[v]||'')) : v;
+    });
+    return o;
+  });
+}
+const _SEM_ID = new Set(['id']);
+function packState(st){
+  const tab=[], idx=new Map();
+  const intern=s=>{ let i=idx.get(s); if(i===undefined){ i=tab.length; tab.push(s); idx.set(s,i); } return i; };
+  const out=Object.assign({}, st);
+  out.v=LS_VER;
+  const ents=st.entregas||[], exts=st.extravios||[];
+  // Os ids de entregas/extravios são internos e só servem ao "Desfazer": em vez de
+  // gravar 68 mil strings aleatórias, gravamos a posição na lista e recriamos os ids
+  // na leitura. Isso é o que mais economiza espaço.
+  const eIdx=new Map(); ents.forEach((e,i)=> eIdx.set(e.id,i));
+  const xIdx=new Map(); exts.forEach((x,i)=> xIdx.set(x.id,i));
+  out._e=_packRows(ents, intern, _SEM_ID);
+  out._x=_packRows(exts, intern, _SEM_ID);
+  out._t=tab;
+  if(st.ultimoImport && typeof st.ultimoImport==='object'){
+    const u=Object.assign({}, st.ultimoImport);
+    if(Array.isArray(u.deltas)){
+      u.deltas=u.deltas.map(d=> ({i: eIdx.has(d.id)?eIdx.get(d.id):-1, qtd:d.qtd})).filter(d=> d.i>=0);
+    }
+    // u.ids pode conter extravios (viram índice) ou motoristas (mantêm o id original)
+    if(Array.isArray(u.ids)) u.ids=u.ids.map(id=> xIdx.has(id)? xIdx.get(id) : id);
+    out.ultimoImport=u;
+  }
+  delete out.entregas; delete out.extravios;
+  return out;
+}
+function unpackState(obj){
+  if(!obj || obj.v!==LS_VER) return obj;          // formato antigo: usa como está
+  const tab=obj._t||[];
+  const out=Object.assign({}, obj);
+  out.entregas=_unpackRows(obj._e, tab).map((e,i)=> Object.assign({id:'e'+i}, e));
+  out.extravios=_unpackRows(obj._x, tab).map((x,i)=> Object.assign({id:'x'+i}, x));
+  if(out.ultimoImport && typeof out.ultimoImport==='object'){
+    const u=Object.assign({}, out.ultimoImport);
+    if(Array.isArray(u.deltas)){
+      u.deltas=u.deltas.map(d=> ({id:'e'+d.i, qtd:d.qtd})).filter(d=> d.id!=='e-1');
+    }
+    if(Array.isArray(u.ids)) u.ids=u.ids.map(v=> typeof v==='number' ? 'x'+v : v);
+    out.ultimoImport=u;
+  }
+  delete out._e; delete out._x; delete out._t; delete out.v;
+  return out;
+}
+/* ---------- ocupação do armazenamento ----------
+   O navegador dá cerca de 5 MB por site. Medimos o tamanho real gravado para avisar
+   antes de encher — quando enche, o save() falha e o trabalho da quinzena se perde. */
+function storageInfo(){
+  let bytes=0;
+  try{
+    const raw=localStorage.getItem(LS_KEY)||'';
+    bytes=raw.length*2;                            // localStorage guarda UTF-16
+  }catch(e){}
+  const pct=Math.min(100, Math.round(bytes/LS_LIMITE*100));
+  return { bytes, pct, mb:(bytes/1024/1024), nivel: pct>=90?'critico' : pct>=70?'alerta' : 'ok' };
+}
+function fmtBytes(b){
+  if(b<1024) return b+' B';
+  if(b<1024*1024) return (b/1024).toFixed(0)+' KB';
+  return (b/1024/1024).toFixed(2)+' MB';
+}
+function renderStorageInfo(){
+  const box=$('#storageBox'); if(!box) return;
+  const i=storageInfo();
+  const cor = i.nivel==='critico'?'var(--red)' : i.nivel==='alerta'?'#B45309' : 'var(--green)';
+  const nEnt=(S.entregas||[]).length, nExt=(S.extravios||[]).length;
+  const aviso = i.nivel==='critico'
+      ? '<b style="color:var(--red)">Espaço quase esgotado.</b> Exporte um backup e limpe as movimentações de períodos já pagos.'
+      : i.nivel==='alerta'
+      ? '<b style="color:#B45309">Espaço começando a encher.</b> Considere limpar as movimentações de períodos já pagos.'
+      : 'Espaço confortável. Os dados são compactados automaticamente ao salvar.';
+  box.innerHTML=`<label class="lbl">Armazenamento deste navegador</label>
+    <div style="height:10px;border-radius:999px;background:#E5E7EB;overflow:hidden;margin:2px 0 8px">
+      <div style="height:100%;width:${Math.max(2,i.pct)}%;background:${cor};transition:width .3s"></div>
+    </div>
+    <p class="panel-note" style="margin:0">
+      <b>${fmtBytes(i.bytes)}</b> de ~5 MB usados (${i.pct}%) ·
+      ${nEnt.toLocaleString('pt-BR')} grupo(s) de entregas · ${nExt.toLocaleString('pt-BR')} extravio(s)<br>${aviso}
+    </p>`;
+}
 function load(){
   try{
     const raw = localStorage.getItem(LS_KEY);
     if(!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
-    const obj = JSON.parse(raw);
+    const obj = unpackState(JSON.parse(raw));
     return Object.assign(JSON.parse(JSON.stringify(DEFAULT_STATE)), obj,
       {config:Object.assign({}, DEFAULT_STATE.config, obj.config||{})});
   }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
@@ -592,10 +721,43 @@ function migrarEstado(){
       if(a && typeof a==='object' && ('bruto' in a)){ delete a.bruto; mudou=true; }
       if(a && typeof a==='object' && Object.keys(a).length===0){ delete S.ajustes[k]; mudou=true; }
     });
+    // 4) ajustes antigos eram gravados só pelo motorista (sem período), então um vale
+    //    aparecia em todas as quinzenas. Move para a quinzena que estava selecionada.
+    const alvoAj=(S.periodoSel||'');
+    Object.keys(S.ajustes).forEach(k=>{
+      if(k.indexOf('\u0001')>-1) return;             // já está no formato novo
+      const nova=alvoAj+'\u0001'+k;
+      if(!S.ajustes[nova]) S.ajustes[nova]=S.ajustes[k];
+      delete S.ajustes[k]; mudou=true;
+    });
   }
   if(mudou) save();
 }
-function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){ toast('Erro ao salvar (armazenamento cheio?)','err'); } }
+function save(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(packState(S)));
+    if(typeof renderStorageInfo==='function') renderStorageInfo();
+  }catch(e){
+    // Armazenamento cheio: o dado NÃO foi gravado. Avisa de forma inequívoca, porque
+    // continuar trabalhando sem saber disso significa perder a quinzena inteira.
+    console.error(e);
+    try{
+      modal(`<h3 style="color:var(--red)">⚠️ Não foi possível salvar</h3>
+        <p class="mh">O armazenamento deste navegador está <b>cheio</b>. As últimas alterações <b>não foram gravadas</b> e serão perdidas se você fechar a página.</p>
+        <p class="mh">Faça agora, nesta ordem:</p>
+        <ol style="margin:6px 0 10px 18px;font-size:13.5px;line-height:1.7;color:var(--text)">
+          <li>Clique em <b>Exportar backup</b> abaixo e guarde o arquivo.</li>
+          <li>Vá em <b>Regras → Manutenção</b> e limpe as movimentações de períodos já pagos.</li>
+          <li>Importe o backup de volta se precisar de algum período antigo.</li>
+        </ol>
+        <div class="modal-actions">
+          <button class="btn primary" id="cfgBkpCheio">⬇️ Exportar backup agora</button>
+          <button class="btn ghost" onclick="__pll.closeModal()">Fechar</button>
+        </div>`);
+      const b=$('#cfgBkpCheio'); if(b) b.onclick=()=>{ exportData(); };
+    }catch(_){ toast('Armazenamento cheio — exporte um backup e limpe movimentações','err'); }
+  }
+}
 
 /* ---------- backup / transferência (provisório, via arquivo) ----------
    Exporta todo o estado como JSON para outra pessoa importar no app dela.
@@ -616,7 +778,7 @@ function importData(file){
   const r = new FileReader();
   r.onload = ()=>{
     let obj;
-    try{ obj = JSON.parse(r.result); }
+    try{ obj = unpackState(JSON.parse(r.result)); }
     catch(e){ toast('Arquivo inválido (não é um backup .json)','err'); return; }
     if(typeof obj!=='object' || obj===null || (!('drivers' in obj) && !('entregas' in obj) && !('config' in obj))){
       toast('Arquivo não parece um backup do app','err'); return;
@@ -669,12 +831,15 @@ function limparMovimentacoes(){
     S.ajustes={};
     S.fechamentos=[];
     S.statusPag={};
+    S.imports=[]; S.ultimoImport=null;
     S.filtroOrigem=''; S.filtroStatus=''; S.filtroOxpay='';
     S.periodoSel=''; S.ref='';
     S.lastSync=''; S.lastSyncErr='';
     save(); closeModal();
     if(typeof renderFech==='function') renderFech();
     if(typeof renderImportCards==='function') renderImportCards();
+    if(typeof renderUltImport==='function') renderUltImport();
+    if(typeof renderStorageInfo==='function') renderStorageInfo();
     if(typeof renderDrivers==='function') renderDrivers();
     if(typeof renderHist==='function') renderHist();
     if(typeof refreshPeriodoSelector==='function') refreshPeriodoSelector();
@@ -725,19 +890,45 @@ function parseNum(v){
   const n = parseFloat(s.replace(/[^0-9.\-]/g,''));
   return isFinite(n)?n:0;
 }
+/* ---------- normalização de datas ----------
+   Sempre devolve dd/mm/aaaa. Precisa aceitar todas as grafias que aparecem nos
+   relatórios porque uma data não reconhecida tem efeito em cascata: a quinzena sai
+   vazia (a entrega cai no fallback), o adicional de domingo/feriado deixa de ser pago
+   e o detalhamento por dia fica fora de ordem. Formatos aceitos:
+     objeto Date (XLSX com cellDates)    · 2026-05-15 / 2026.05.15 / 2026/05/15
+     15/05/2026 · 15-05-2026 · 15.05.2026 · 15/05/26   · serial do Excel (45789)
+   Datas com hora ("15/05/2026 14:30") também funcionam. */
+const XLS_EPOCH = Date.UTC(1899,11,30);        // Excel conta a partir de 30/12/1899
+function serialParaData(n){
+  // faixa plausível: ~1954 a ~2064. Fora disso é outro número, não uma data.
+  if(!isFinite(n) || n<20000 || n>60000) return '';
+  const d=new Date(XLS_EPOCH + Math.floor(n)*86400000);
+  const dd=String(d.getUTCDate()).padStart(2,'0'), mm=String(d.getUTCMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}/${d.getUTCFullYear()}`;
+}
 function normDate(v){
   if(v==null||v==='') return '';
   if(v instanceof Date){
     const dd=String(v.getUTCDate()).padStart(2,'0'),mm=String(v.getUTCMonth()+1).padStart(2,'0');
     return `${dd}/${mm}/${v.getUTCFullYear()}`;
   }
+  if(typeof v==='number'){ const s=serialParaData(v); if(s) return s; }
   let s=(''+v).trim(); if(!s) return '';
-  let m=s.match(/(\d{4})-(\d{2})-(\d{2})/);                       // ISO 2026-05-15[ hh:mm]
-  if(m) return `${m[3]}/${m[2]}/${m[1]}`;
-  m=s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);            // dd/mm/yyyy ou dd-mm-yyyy
+  // serial do Excel vindo como texto (célula não formatada como data)
+  if(/^\d{4,5}([.,]\d+)?$/.test(s)){
+    const ser=serialParaData(parseFloat(s.replace(',','.')));
+    if(ser) return ser;
+  }
+  // ano primeiro: 2026-05-15, 2026/05/15, 2026.05.15 (aceita hora depois)
+  let m=s.match(/(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/);
+  if(m) return `${m[3].padStart(2,'0')}/${m[2].padStart(2,'0')}/${m[1]}`;
+  // dia primeiro: 15/05/2026, 15-05-2026, 15.05.2026, 15/05/26
+  m=s.match(/(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{2,4})/);
   if(m){ let y=m[3]; if(y.length===2)y='20'+y; return `${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}/${y}`; }
-  return s.slice(0,20);
+  return s.slice(0,20);                         // não reconhecido: preserva o original
 }
+// true quando normDate conseguiu produzir uma data utilizável
+function dataOk(s){ return /^\d{2}\/\d{2}\/\d{4}$/.test(''+s); }
 function dateKey(s){
   const m=(''+s).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
   return m? m[3]+m[2].padStart(2,'0')+m[1].padStart(2,'0') : ('zzz'+s);
@@ -984,11 +1175,11 @@ function computeFechamentos(){
   });
 
   S.extravios.forEach(x=>{
-    // BUGFIX: só filtra pela quinzena quando o extravio TEM período definido.
-    // Extravios sem período (importados manualmente ou sem data interpretável)
-    // entram em qualquer fechamento — antes eram descartados quando havia uma
-    // quinzena selecionada, e o desconto não aparecia.
-    if(S.periodoSel && x.periodo && !periodoMatch(x.periodo, S.periodoSel)) return;
+    // CORREÇÃO: extravio sem período NÃO entra em todas as quinzenas (antes o mesmo
+    // desconto era aplicado em cada fechamento aberto). Agora a importação manual já
+    // grava o período; os poucos registros antigos sem período aparecem somente na
+    // visão "Todos os períodos", para não sumirem nem serem descontados duas vezes.
+    if(S.periodoSel && !periodoMatch(x.periodo||'', S.periodoSel)) return;
     const o = getDriver(x.motorista);
     const emp = /imile/i.test(x.empresa)?'iMile':'J&T';
     const multa = emp==='iMile'? parseNum(S.config.multaImile) : parseNum(S.config.multaJT);
@@ -999,7 +1190,11 @@ function computeFechamentos(){
 
   // aplica overrides salvos
   const arr = Object.values(map).map(o=>{
-    const ov = S.ajustes[o.key] || {};
+    // CORREÇÃO: ajustes manuais (vales/adicional/outros) são POR PERÍODO, igual ao
+    // status de pagamento. Antes a chave era só o motorista, então um vale lançado
+    // na 1ª quinzena reaparecia em todas as outras.
+    const ajusteKey = (S.periodoSel||'')+'\u0001'+o.key;
+    const ov = S.ajustes[ajusteKey] || {};
     // Valor bruto: SEMPRE recalculado das entregas × tarifa (nunca congelado por edições
     // manuais de outros campos — assim reimportar relatórios sempre atualiza o bruto).
     const bruto = o.valorBrutoCalc;
@@ -1023,7 +1218,7 @@ function computeFechamentos(){
       o.origem = top[0];
       o.origemPct = totReg? Math.round(top[1]/totReg*100) : 0;
     }
-    return Object.assign(o,{bruto,bonus,extravio,vales,adicional,outros,liquido,status,statusKey});
+    return Object.assign(o,{bruto,bonus,extravio,vales,adicional,outros,liquido,status,statusKey,ajusteKey});
   });
   arr.sort((a,b)=> b.liquido - a.liquido);
   return arr;
@@ -1042,7 +1237,8 @@ function renderFech(){
   if(S.filtroOrigem) view = view.filter(d=> d.origem===S.filtroOrigem);
   if(S.filtroOxpay==='com') view = view.filter(d=> d.oxpay);
   else if(S.filtroOxpay==='sem') view = view.filter(d=> !d.oxpay);
-  if(S.filtroStatus) view = view.filter(d=> d.status===S.filtroStatus);
+  if(S.filtroStatus==='sem') view = view.filter(d=> !d.status);
+  else if(S.filtroStatus) view = view.filter(d=> d.status===S.filtroStatus);
   if(q) view = view.filter(d=> norm(d.nome).includes(q));
 
   // KPIs
@@ -1141,7 +1337,7 @@ function driverCard(d){
   card.innerHTML = `
     <div class="driver-head">
       <div>
-        <div class="driver-name">${esc(d.nome)} ${d.oxpay?`<img src="${OXPAY_LOGO}" class="oxpay-badge" title="Recebe via OXpay" alt="OXpay">`:''} ${d.cadastrado?'':'<span class="badge yellow" title="Não está no cadastro">sem cadastro</span>'} ${d.status==='pago'?'<span class="badge status-pago">✓ PAGO</span>':(d.status==='pendente'?'<span class="badge status-pendente">● PENDENTE</span>':'')}</div>
+        <div class="driver-name">${esc(d.nome)} ${d.oxpay?`<img src="${OXPAY_LOGO}" class="oxpay-badge" title="Recebe via OXpay" alt="OXpay">`:''} ${d.cadastrado?'':'<span class="badge yellow" title="Não está no cadastro">sem cadastro</span>'} ${d.status==='pago'?'<span class="badge status-pago">✓ PAGO</span>':(d.status==='pendente'?'<span class="badge status-pendente">● PENDENTE</span>':'<span class="badge neutral">SEM STATUS</span>')}</div>
         <div class="driver-phone">📱 ${d.telefone? esc(d.telefone) : '<span style="color:var(--red)">sem telefone</span>'}
           <button class="btn ghost sm" data-act="editphone" style="min-height:26px;padding:0 9px">editar</button></div>
       </div>
@@ -1158,7 +1354,7 @@ function driverCard(d){
 
     <div class="pay-grid">
       <div class="pay-cell calc-cell"><label>Valor bruto (entregas)</label><div class="val" title="${d.jt+d.imile} entregas — calculado automaticamente">${fmtBRL(d.bruto)}</div></div>
-      ${d.bonus?`<div class="pay-cell bonus-cell"><label>Bônus domingos/feriados (+)</label><div class="val">+${fmtBRL(d.bonus)}</div></div>`:''}
+      ${d.bonus?`<div class="pay-cell bonus-cell"><label>Bônus (+)</label><div class="val">+${fmtBRL(d.bonus)}</div></div>`:''}
       <div class="pay-cell"><label>Adicional de rota (+)</label><input data-f="adicional" inputmode="decimal" value="${d.adicional.toFixed(2).replace('.',',')}"></div>
       ${S.config.descAuto
         ? `<div class="pay-cell calc-cell"><label>Extravios (−)</label><div class="val" style="color:var(--red)">-${fmtBRL(d.extravio)}</div></div>`
@@ -1180,6 +1376,7 @@ function driverCard(d){
 
     <div class="status-row">
       <span class="status-label">Status do pagamento</span>
+      <button class="btn sm status-btn${!d.status?' on-sem':''}" data-act="st-clear">Sem Status</button>
       <button class="btn sm status-btn${d.status==='pendente'?' on-pendente':''}" data-act="st-pendente">● Pendente</button>
       <button class="btn sm status-btn${d.status==='pago'?' on-pago':''}" data-act="st-pago">✓ Pago</button>
     </div>
@@ -1210,7 +1407,8 @@ function driverCard(d){
     if(Math.abs(vales)>0.005) ov.vales=vales;
     if(Math.abs(adicional)>0.005) ov.adicional=adicional;
     if(Math.abs(outros)>0.005) ov.outros=outros;
-    if(Object.keys(ov).length) S.ajustes[d.key]=ov; else delete S.ajustes[d.key];
+    const ajK = d.ajusteKey || ((S.periodoSel||'')+'\u0001'+d.key);
+    if(Object.keys(ov).length) S.ajustes[ajK]=ov; else delete S.ajustes[ajK];
     save();
     d.adicional=adicional;d.extravio=extravio;d.vales=vales;d.outros=outros;d.liquido=liq;
   }
@@ -1225,6 +1423,7 @@ function driverCard(d){
     else if(act==='editphone') editPhone(d);
     else if(act==='st-pago') setStatusPag(d,'pago');
     else if(act==='st-pendente') setStatusPag(d,'pendente');
+    else if(act==='st-clear') setStatusPag(d,'');
   });
   return card;
 }
@@ -1233,7 +1432,8 @@ function driverCard(d){
 function setStatusPag(d, val){
   const key = d.statusKey || ((S.periodoSel||'')+'\u0001'+d.key);
   if(!S.statusPag) S.statusPag={};
-  if(S.statusPag[key]===val) delete S.statusPag[key];   // clicar no status atual desmarca (volta ao neutro)
+  if(!val) delete S.statusPag[key];
+  else if(S.statusPag[key]===val) delete S.statusPag[key];   // clicar no status atual desmarca (volta ao neutro)
   else S.statusPag[key]=val;
   save(); renderFech();
 }
@@ -1261,7 +1461,7 @@ function resumoTexto(d){
   L.push('');
   L.push(`*Valores*`);
   L.push(`Bruto: ${fmtBRL(d.bruto)}`);
-  if(d.bonus) L.push(`Bônus domingos/feriados: +${fmtBRL(d.bonus)}`);
+  if(d.bonus) L.push(`Bônus: +${fmtBRL(d.bonus)}`);
   if(d.adicional) L.push(`Adicional de rota: +${fmtBRL(d.adicional)}`);
   if(d.extravio) L.push(`Extravios: -${fmtBRL(d.extravio)}`);
   if(d.vales) L.push(`Vales: -${fmtBRL(d.vales)}`);
@@ -1393,7 +1593,7 @@ function faturaInner(d, rec){
     <div style="margin-top:18px;display:flex;justify-content:flex-end">
       <table style="width:100%;max-width:360px;font-size:14px;border-collapse:collapse">
         <tr><td style="padding:6px 0;color:#374151">Valor bruto (entregas)</td><td style="text-align:right;font-weight:600">${fmtBRL(d.bruto)}</td></tr>
-        ${d.bonus?`<tr><td style="padding:6px 0;color:#374151">Bônus domingos/feriados</td><td style="text-align:right;color:#7C3AED;font-weight:600">+${fmtBRL(d.bonus)}</td></tr>`:''}
+        ${d.bonus?`<tr><td style="padding:6px 0;color:#374151">Bônus</td><td style="text-align:right;color:#7C3AED;font-weight:600">+${fmtBRL(d.bonus)}</td></tr>`:''}
         ${d.adicional?`<tr><td style="padding:6px 0;color:#374151">Adicional de rota</td><td style="text-align:right;color:#16A34A;font-weight:600">+${fmtBRL(d.adicional)}</td></tr>`:''}
         ${d.extravio?`<tr><td style="padding:6px 0;color:#374151">Extravios</td><td style="text-align:right;color:#DC2626;font-weight:600">-${fmtBRL(d.extravio)}</td></tr>`:''}
         ${d.vales?`<tr><td style="padding:6px 0;color:#374151">Vales</td><td style="text-align:right;color:#DC2626;font-weight:600">-${fmtBRL(d.vales)}</td></tr>`:''}
@@ -1444,10 +1644,7 @@ function gerarFatura(d){ downloadFatura(d); }
    ========================================================================= */
 const IMPORTS = {
   jt:    {titulo:'Relatório J&T', icon:'🟡', empresa:'J&T', tipo:'entregas'},
-  imile: {titulo:'Relatório iMile', icon:'🔵', empresa:'iMile', tipo:'entregas'},
-  tickets:{titulo:'Controle de Tickets (cadastro de motoristas)', icon:'🎫', empresa:null, tipo:'motoristas'},
-  extravios:{titulo:'Relatório de extravios', icon:'⚠️', empresa:null, tipo:'extravios'},
-  motoristas:{titulo:'Base de motoristas (telefones)', icon:'👤', empresa:null, tipo:'motoristas'}
+  imile: {titulo:'Relatório iMile', icon:'🔵', empresa:'iMile', tipo:'entregas'}
 };
 // dicionário de detecção de colunas (normalizado)
 const COL_HINTS = {
@@ -1786,9 +1983,10 @@ function openMapper(k, rows){
   const headers=rows[hi].map((h,i)=> (''+h).trim() || ('Coluna '+(i+1)));
   const body=rows.slice(hi+1);
   const need = cfg.tipo==='entregas' ? ['motorista','pedido','data','carregamento','cidade','qtd']
-             : cfg.tipo==='extravios' ? ['pedido','motorista','empresa','valor']
+             : cfg.tipo==='extravios' ? ['pedido','motorista','empresa','valor','data']
              : ['nome','telefone','cidade'];
-  const labels={motorista:'Motorista (nome)',nome:'Motorista (nome)',qtd:'Quantidade de entregas',data:'Data (entrega/conclusão)',carregamento:'Data de carregamento',cidade:'Cidade',pedido:'ID / pedido',empresa:'Empresa',valor:'Valor (R$)',telefone:'Telefone'};
+  let labels={motorista:'Motorista (nome)',nome:'Motorista (nome)',qtd:'Quantidade de entregas',data:'Data (entrega/conclusão)',carregamento:'Data de carregamento',cidade:'Cidade',pedido:'ID / pedido',empresa:'Empresa',valor:'Valor (R$)',telefone:'Telefone'};
+  if(cfg.tipo==='extravios') labels.data='Data do desconto';
   const detected={};
   need.forEach(key=>{ const hk = key==='nome'?'motorista':key; detected[key]=detectCol(headers,hk); });
   const presetName = applyPreset(cfg.tipo, headers, detected);
@@ -1802,6 +2000,9 @@ function openMapper(k, rows){
   }).join('');
 
   let extraNote='';
+  if(cfg.tipo==='extravios'){
+    extraNote = `<p class="panel-note">Sem <b>Data do desconto</b> mapeada, os extravios entram na quinzena que está aberta em <b>Fechamentos</b> (<b>${esc(periodoLabel(S.periodoSel))}</b>). Com a data mapeada, o vínculo segue a regra configurada em Extravios automáticos.</p>`;
+  }
   if(cfg.tipo==='entregas'){
     extraNote = `<p class="panel-note">Empresa fixada como <b>${cfg.empresa}</b>. Sem coluna de quantidade, cada linha conta como 1 entrega. Se a coluna de <b>pedido</b> for informada, volumes do mesmo pedido (ex.: <code>-001</code>, <code>-002</code>) contam como <b>1 entrega só</b> (pedido-mãe).</p>`;
   }
@@ -1867,8 +2068,82 @@ function openMapper(k, rows){
   };
 }
 
+/* ---------- proteção contra reimportação do mesmo relatório ----------
+   Gera uma assinatura leve do arquivo (tipo + empresa + nº de linhas + CRC das
+   chaves de cada linha). Se o mesmo arquivo já foi importado, avisa antes de somar
+   as entregas de novo — era a causa de fechamento dobrado. Guarda também o delta da
+   última importação para permitir desfazer. */
+function importSig(cfg, sel, body){
+  const parts=[];
+  for(const r of body){
+    const ped = sel.pedido>-1 ? (''+(r[sel.pedido]==null?'':r[sel.pedido])).trim() : '';
+    const nm  = (sel.motorista>-1?sel.motorista:sel.nome) > -1 ? (''+(r[(sel.motorista>-1?sel.motorista:sel.nome)]==null?'':r[(sel.motorista>-1?sel.motorista:sel.nome)])).trim() : '';
+    const dt  = sel.data>-1 ? (''+(r[sel.data]==null?'':r[sel.data])).trim() : '';
+    parts.push(ped || (nm+'|'+dt));
+  }
+  const crc=(crc32(new TextEncoder().encode(parts.join('\n')))>>>0).toString(16);
+  return `${cfg.tipo||''}:${cfg.empresa||''}:${body.length}:${crc}`;
+}
+function importJaFeita(sig){
+  return (S.imports||[]).find(i=> i.sig===sig);
+}
+function registraImport(sig, cfg, body, resumo, delta){
+  if(!S.imports) S.imports=[];
+  S.imports.push({ sig, tipo:cfg.tipo, empresa:cfg.empresa||'', quando:new Date().toISOString(),
+                   linhas:body.length, total:resumo });
+  if(S.imports.length>60) S.imports=S.imports.slice(-60);   // histórico enxuto
+  S.ultimoImport = Object.assign({ sig, tipo:cfg.tipo, empresa:cfg.empresa||'',
+                   quando:new Date().toISOString(), linhas:body.length, total:resumo }, delta||{});
+}
+function desfazerUltimoImport(){
+  const u=S.ultimoImport;
+  if(!u){ toast('Nenhuma importação para desfazer','err'); return; }
+  if(!confirm(`Desfazer a última importação?\n\n${u.tipo==='entregas'?'Entregas':'Registros'}: ${u.total}\nQuando: ${new Date(u.quando).toLocaleString('pt-BR')}\n\nOs dados voltam ao estado anterior a essa importação.`)) return;
+  if(u.tipo==='entregas' && Array.isArray(u.deltas)){
+    u.deltas.forEach(d=>{
+      const e=S.entregas.find(x=>x.id===d.id);
+      if(!e) return;
+      e.qtd = parseNum(e.qtd) - parseNum(d.qtd);
+      if(e.qtd<=0.0001) S.entregas = S.entregas.filter(x=>x.id!==e.id);
+    });
+  }else if(Array.isArray(u.ids)){
+    const rem=new Set(u.ids);
+    S.extravios = S.extravios.filter(x=>!rem.has(x.id));
+    S.drivers   = S.drivers.filter(x=>!rem.has(x.id));
+  }
+  S.imports=(S.imports||[]).filter(i=> !(i.sig===u.sig && i.quando===u.quando));
+  S.ultimoImport=null;
+  save(); renderImportCards(); renderFech(); renderDrivers(); refreshPeriodoSelector();
+  toast('Importação desfeita','ok');
+}
+function renderUltImport(){
+  const box=$('#ultImportBox'); if(!box) return;
+  const u=S.ultimoImport;
+  if(!u){ box.innerHTML=''; box.style.display='none'; return; }
+  box.style.display='';
+  const quando=new Date(u.quando).toLocaleString('pt-BR');
+  const qtd=(u.total||0).toLocaleString('pt-BR');
+  box.innerHTML=`<div class="panel" style="margin-bottom:18px">
+    <div class="panel-head"><div>
+      <div class="panel-title">↩︎ Última importação</div>
+      <h3>${esc((u.empresa||u.tipo||'').toString())} · ${qtd} ${u.tipo==='entregas'?'entrega(s)':'registro(s)'}</h3>
+    </div><button class="btn secondary sm" id="btnDesfazerImport">Desfazer</button></div>
+    <p class="panel-note" style="margin-top:0">Importado em ${esc(quando)} · ${u.linhas.toLocaleString('pt-BR')} linha(s) do arquivo. Se importou o relatório errado ou por engano, desfaça aqui — as quantidades voltam exatamente ao que eram.</p>
+  </div>`;
+  const b=$('#btnDesfazerImport'); if(b) b.addEventListener('click', desfazerUltimoImport);
+}
 function doImport(k,cfg,sel,body){
   let added=0, totalQ=0, volsIgnorados=0;
+  const sig=importSig(cfg,sel,body);
+  const ja=importJaFeita(sig);
+  if(ja){
+    const quando=new Date(ja.quando).toLocaleString('pt-BR');
+    const msg = `⚠️ ESTE RELATÓRIO JÁ FOI IMPORTADO\n\nEm ${quando} · ${(ja.total||0).toLocaleString('pt-BR')} ${ja.tipo==='entregas'?'entrega(s)':'registro(s)'}\n\n`
+      + (cfg.tipo==='entregas'
+          ? 'Importar de novo SOMA as entregas e dobra o valor a pagar dos motoristas.\n\nImportar mesmo assim?'
+          : 'Importar de novo duplica os registros.\n\nImportar mesmo assim?');
+    if(!confirm(msg)) { closeModal(); toast('Importação cancelada — o relatório já estava importado','ok'); return; }
+  }
   if(cfg.tipo==='entregas'){
     if(sel.motorista<0){ toast('Selecione a coluna de motorista','err'); return; }
     // PROTEÇÃO: se a coluna de Quantidade foi apontada para números gigantes (ex.: waybill/ID
@@ -1882,6 +2157,25 @@ function doImport(k,cfg,sel,body){
       }
     }
     const fallbackP = sel.periodoFallback || '';
+    // Datas não reconhecidas têm efeito em cascata (quinzena vazia, sem adicional de
+    // domingo, detalhamento fora de ordem). Antes isso passava silencioso — agora conta
+    // e mostra exemplos para o usuário decidir se importa ou corrige a planilha.
+    if(sel.data>-1){
+      const ruins=[]; let nRuins=0;
+      for(const r of body){
+        const bruta=r[sel.data];
+        if(bruta==null || (''+bruta).trim()==='') continue;      // vazia é tratada à parte
+        if(!dataOk(normDate(bruta))){ nRuins++; if(ruins.length<3) ruins.push((''+bruta).slice(0,24)); }
+      }
+      if(nRuins){
+        const msg=`⚠️ ${nRuins.toLocaleString('pt-BR')} linha(s) com DATA em formato não reconhecido\n\n`
+          + `Exemplos: ${ruins.join(' · ')}\n\n`
+          + `Essas entregas entrarão no período escolhido manualmente e NÃO receberão adicional de domingo/feriado, `
+          + `porque não é possível saber o dia da semana.\n\n`
+          + `Recomendado: cancelar, formatar a coluna como data na planilha e importar de novo.\n\nImportar mesmo assim?`;
+        if(!confirm(msg)){ closeModal(); toast('Importação cancelada — verifique a coluna de data','err'); return; }
+      }
+    }
     // agrega por motorista × empresa × dia × cidade × período
     const groups=new Map();
     const seen = sel.pedido>-1 ? new Set() : null;   // dedup por pedido-mãe (volumes -001/-002…)
@@ -1900,29 +2194,41 @@ function doImport(k,cfg,sel,body){
       const key=nome+'\u0001'+cfg.empresa+'\u0001'+data+'\u0001'+carreg+'\u0001'+cidade+'\u0001'+periodo;
       groups.set(key,(groups.get(key)||0)+qtd);
     });
+    const deltas=[];
     groups.forEach((qtd,key)=>{
       const [motorista,empresa,data,dataCarregamento,cidade,periodo]=key.split('\u0001');
       const exist=S.entregas.find(e=> e.motorista===motorista && e.empresa===empresa && e.data===data && (e.dataCarregamento||'')===(dataCarregamento||'') && e.cidade===cidade && (e.periodo||'')===(periodo||''));
-      if(exist) exist.qtd+=qtd; else S.entregas.push({id:uid(),motorista,empresa,data,dataCarregamento,cidade,qtd,periodo});
+      if(exist){ exist.qtd+=qtd; deltas.push({id:exist.id,qtd}); }
+      else { const nova={id:uid(),motorista,empresa,data,dataCarregamento,cidade,qtd,periodo}; S.entregas.push(nova); deltas.push({id:nova.id,qtd}); }
       added++; totalQ+=qtd;
     });
+    registraImport(sig, cfg, body, totalQ, {deltas});
     // passa a visualizar a quinzena recém-importada
     if(fallbackP){ S.periodoSel = fallbackP; S.ref = quinzenaLabel(fallbackP); }
   } else if(cfg.tipo==='extravios'){
     if(sel.pedido<0&&sel.motorista<0){ toast('Selecione ao menos pedido ou motorista','err'); return; }
+    const idsExt=[];
     body.forEach(r=>{
       const pedido=sel.pedido>-1?(r[sel.pedido]||'').toString().trim():'';
       const nome=sel.motorista>-1?(r[sel.motorista]||'').toString().trim():'';
       if(!pedido&&!nome) return;
       let empresa = sel.empresa>-1 ? (r[sel.empresa]||'') : '';
       const valor = sel.valor>-1 ? (r[sel.valor]===''?null:parseNum(r[sel.valor])) : null;
-      S.extravios.push({id:uid(),pedido,motorista:nome,empresa,valor,data:''});
+      // CORREÇÃO: grava data e período. Sem data mapeada, entra na quinzena que está
+      // aberta em Fechamentos — assim o desconto não se repete em todos os períodos.
+      const dtExt = sel.data>-1 ? normDate(r[sel.data]) : '';
+      const perExt = dtExt
+        ? ((S.config.extVinculo==='direto' ? quinzenaFromDate(dtExt) : quinzenaFromPagamento(dtExt)) || (S.periodoSel||''))
+        : (S.periodoSel||'');
+      const novoExt={id:uid(),pedido,motorista:nome,empresa,valor,data:dtExt,periodo:perExt};
+      S.extravios.push(novoExt); idsExt.push(novoExt.id);
       added++;
     });
+    registraImport(sig, cfg, body, added, {ids:idsExt});
   } else { // motoristas (base de telefones OU Controle de Tickets)
     if(sel.nome<0){ toast('Selecione a coluna de nome','err'); return; }
     // agrega por motorista: telefone (primeiro não-vazio) + região dominante das cidades
-    const agg=new Map();
+    const agg=new Map(); const idsDrv=[];
     body.forEach(r=>{
       const nome=(r[sel.nome]||'').toString().trim(); if(!nome) return;
       const tel=sel.telefone>-1?(r[sel.telefone]||'').toString().trim():'';
@@ -1941,16 +2247,17 @@ function doImport(k,cfg,sel,body){
       if(regEnt.length) comReg++;
       const exist=findDriver(o.nome);
       if(exist){ if(o.tel)exist.telefone=o.tel; if(cidadeFinal)exist.cidade=cidadeFinal; }
-      else S.drivers.push({id:uid(),nome:nomeFmt(o.nome),telefone:o.tel,cidade:cidadeFinal,tarifa:null,aliases:[]});
+      else { const nd={id:uid(),nome:nomeFmt(o.nome),telefone:o.tel,cidade:cidadeFinal,tarifa:null,aliases:[]}; S.drivers.push(nd); idsDrv.push(nd.id); }
       added++;
     });
+    registraImport(sig, cfg, body, added, {ids:idsDrv});
     save(); closeModal();
-    renderImportCards(); renderFech(); renderDrivers();
+    renderImportCards(); renderUltImport(); renderFech(); renderDrivers();
     toast(added+' motorista(s) no cadastro'+(comReg?' · '+comReg+' com região identificada':''),'ok');
     return;
   }
   save(); closeModal();
-  renderImportCards(); renderFech(); renderDrivers(); refreshPeriodoSelector();
+  renderImportCards(); renderUltImport(); renderFech(); renderDrivers(); refreshPeriodoSelector();
   if(cfg.tipo==='entregas') toast(totalQ.toLocaleString('pt-BR')+' entregas'+(volsIgnorados?' · '+volsIgnorados+' volumes-filho ignorados':'')+' ('+added+' grupos)','ok');
   else toast(added+' registro(s) importado(s)','ok');
 }
@@ -2631,7 +2938,7 @@ window.__pll = { closeModal };
 
 document.addEventListener('DOMContentLoaded',()=>{
   try{
-    bind(); showPage('fechamentos');
+    bind(); showPage('fechamentos'); renderUltImport(); renderStorageInfo();
     if(S.config.extAutoSync && S.config.gsheetUrl){ syncExtravios(true); }
   }
   catch(err){ console.error(err); toast('Erro ao iniciar: '+err.message,'err'); }
