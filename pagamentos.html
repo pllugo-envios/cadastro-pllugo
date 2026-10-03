@@ -287,7 +287,7 @@
         <div class="section-title">
           <div>
             <h2>Importar relatórios</h2>
-            <p>Importe os relatórios da J&amp;T e da iMile (entregas). Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. Nas entregas, a ferramenta detecta a <b>quinzena</b> (01-15 ou 16-fim do mês) e registra cada entrega no período certo.</p>
+            <p>Importe os relatórios da J&amp;T e da iMile (entregas). Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. A ferramenta identifica automaticamente a <b>unidade</b> (Mauá/Ribeirão), a <b>quinzena</b> e os pedidos-mãe, sem tela de confirmação.</p>
           </div>
         </div>
         <div id="ultImportBox" style="display:none"></div>
@@ -333,7 +333,7 @@
           <p class="panel-note">Para a leitura automática funcionar: (1) deixe a planilha pública — <b>Arquivo → Compartilhar → Publicar na web</b>, escolha a aba e o formato <b>CSV</b> (cole esse link aqui), ou <b>Compartilhar → Qualquer pessoa com o link: Leitor</b>; (2) <b>hospede o app</b> (ex.: GitHub Pages) em vez de abrir o arquivo direto do disco — vários navegadores bloqueiam o acesso à planilha a partir de <code>file://</code>; (3) marque <b>Sincronizar ao abrir o app</b> para reler a planilha a cada atualização da página.</p>
         </div>
         <div class="grid cols-2" id="importGrid"></div>
-        <div class="footer">Dica: você pode importar o mesmo tipo várias vezes — os dados se acumulam até você limpar.</div>
+        <div class="footer">Selecione o arquivo e aguarde a sinalização de concluído. Se alguma informação essencial não puder ser identificada, o sistema mostrará o erro.</div>
       </section>
 
       <!-- ====================== MOTORISTAS ====================== -->
@@ -1805,6 +1805,82 @@ function applyPreset(tipo, headers, detected){
   }
   return null;
 }
+function unidadeEmTexto(v){
+  const n=norm(v||'');
+  const maua=/\bMAUA\b/.test(n);
+  const ribeirao=/\bRIBEIRAO(?:\s+PIRES)?\b/.test(n);
+  if(maua&&!ribeirao) return 'maua';
+  if(ribeirao&&!maua) return 'ribeirao';
+  return '';
+}
+function detectImportUnit(headers, body, sourceName, preHeaderRows){
+  const score={maua:0,ribeirao:0};
+  const add=(v,peso)=>{ const k=unidadeEmTexto(v); if(k) score[k]+=peso; };
+
+  // O nome do arquivo e as linhas de título são os sinais mais confiáveis.
+  add(sourceName,1000);
+  (preHeaderRows||[]).forEach(r=>(r||[]).forEach(v=>add(v,100)));
+
+  // Em especial no iMile, "Scan station" informa a base. Também cobre as
+  // variações usuais de J&T: unidade, filial, base, hub, estação e origem.
+  headers.forEach((h,i)=>{
+    const n=norm(h);
+    const ehDestino=/DESTINO|DESTINATION|RECIPIENT|CIDADE|CITY|MUNICIPIO|BAIRRO/.test(n);
+    const ehUnidade=/UNIDADE|FILIAL|BASE|AGENCIA|HUB|ESTACAO|STATION|ORIGEM|ORIGIN|SITE|CENTRO DE DISTRIBUICAO|DISTRIBUTION CENTER|SORTING CENTER|OPERACAO/.test(n);
+    if(!ehDestino && ehUnidade) body.slice(0,2000).forEach(r=>add(r[i],10));
+  });
+
+  // Último recurso para relatórios sem coluna de base: usa a região dominante
+  // da cidade de destino. Rio Grande da Serra pertence à operação de Ribeirão.
+  if(score.maua===0 && score.ribeirao===0){
+    const cidade=detectCol(headers,'cidade');
+    if(cidade>-1) body.forEach(r=>{
+      const reg=classificaRegiao(r[cidade]);
+      if(reg==='Mauá') score.maua++;
+      else if(reg==='Ribeirão Pires'||reg==='Rio Grande da Serra') score.ribeirao++;
+    });
+  }
+  if(score.maua===score.ribeirao) return '';
+  return score.maua>score.ribeirao?'Mauá':'Ribeirão';
+}
+function processRowsAutomatically(k, rows, sourceName){
+  const cfg=IMPORTS[k];
+  const hi=pickHeaderRow(rows);
+  const headers=(rows[hi]||[]).map((h,i)=>(''+h).trim()||('Coluna '+(i+1)));
+  const body=rows.slice(hi+1).filter(r=>r.some(v=>(''+(v==null?'':v)).trim()!==''));
+  if(!body.length){ toast('Erro: o relatório não possui linhas de dados','err'); return; }
+
+  const need=cfg.tipo==='entregas'?['motorista','pedido','data','carregamento','cidade','qtd']
+             :cfg.tipo==='extravios'?['pedido','motorista','empresa','valor','data']
+             :['nome','telefone','cidade'];
+  const sel={};
+  need.forEach(key=>{ const hk=key==='nome'?'motorista':key; sel[key]=detectCol(headers,hk); });
+  applyPreset(cfg.tipo,headers,sel);
+
+  if(cfg.tipo==='entregas'){
+    // J&T e iMile: cada pedido-mãe vale 1. Não usa uma eventual coluna numérica
+    // que possa ser confundida com quantidade.
+    sel.qtd=-1;
+    if(sel.motorista<0){ toast('Erro: não foi possível identificar a coluna de motorista','err'); return; }
+    if(sel.pedido<0){ toast('Erro: não foi possível identificar a coluna de pedido','err'); return; }
+    sel.unidade=detectImportUnit(headers,body,sourceName||'',rows.slice(0,hi));
+    if(!sel.unidade){
+      toast('Erro: não foi possível identificar automaticamente a unidade Mauá/Ribeirão. Verifique o nome do arquivo ou a coluna de base/filial/estação.','err');
+      return;
+    }
+    const dist={};
+    if(sel.data>-1) body.forEach(r=>{ const q=quinzenaFromDate(normDate(r[sel.data])); if(q) dist[q]=(dist[q]||0)+1; });
+    const periodos=Object.keys(dist);
+    sel.periodoFallback=periodos.length
+      ? periodos.sort((a,b)=>dist[b]-dist[a])[0]
+      : (/^\d{4}-\d{2}-[12]$/.test(S.periodoSel||'')?S.periodoSel:'');
+    if(!sel.periodoFallback){
+      toast('Erro: não foi possível identificar automaticamente o período pelas datas do relatório','err');
+      return;
+    }
+  }
+  doImport(k,cfg,sel,body);
+}
 function renderImportCards(){
   const host=$('#importGrid'); host.innerHTML='';
   Object.keys(IMPORTS).forEach(k=>{
@@ -1843,7 +1919,7 @@ function renderImportCards(){
       if(!txt.trim()){toast('Cole algum conteúdo primeiro','err');return;}
       const rows=parseDelimited(txt);
       if(rows.length<2){toast('Não consegui ler linhas suficientes','err');return;}
-      openMapper(k, rows);
+      processRowsAutomatically(k,rows,'');
     });
   });
   host.addEventListener('click',e=>{
@@ -1869,7 +1945,7 @@ function handleFile(file,k){
   const ext=(file.name.split('.').pop()||'').toLowerCase();
   if(ext==='csv'||ext==='txt'){
     const r=new FileReader();
-    r.onload=()=>{ const rows=parseDelimited(r.result); if(rows.length<2){toast('Arquivo sem linhas de dados','err');return;} openMapper(k,rows); };
+    r.onload=()=>{ const rows=parseDelimited(r.result); if(rows.length<2){toast('Arquivo sem linhas de dados','err');return;} processRowsAutomatically(k,rows,file.name); };
     r.readAsText(file,'utf-8');
   } else if(ext==='xlsx'||ext==='xls'){
     loadXLSX().then(XLSX=>{
@@ -1881,7 +1957,7 @@ function handleFile(file,k){
           const ws=wb.Sheets[sheetName];
           const rows=XLSX.utils.sheet_to_json(ws,{header:1,blankrows:false,defval:''});
           if(rows.length<2){toast('Planilha sem dados','err');return;}
-          openMapper(k,rows);
+          processRowsAutomatically(k,rows,file.name+' '+sheetName);
         }catch(err){ toast('Erro ao ler XLSX','err'); }
       };
       r.readAsArrayBuffer(file);
@@ -2250,17 +2326,14 @@ function renderUltImport(){
 function doImport(k,cfg,sel,body){
   let added=0, totalQ=0, volsIgnorados=0, pedidosMaeImportados=0, pedidosSemId=0;
   if(cfg.tipo==='entregas' && !sel.unidade){
-    toast('Selecione a unidade do relatório: Mauá ou Ribeirão','err'); return;
+    toast('Erro: não foi possível identificar automaticamente a unidade Mauá/Ribeirão','err'); return;
   }
   const sig=importSig(cfg,sel,body);
   const ja=importJaFeita(sig);
   if(ja){
     const quando=new Date(ja.quando).toLocaleString('pt-BR');
-    const msg = `⚠️ ESTE RELATÓRIO JÁ FOI IMPORTADO\n\nEm ${quando} · ${(ja.total||0).toLocaleString('pt-BR')} ${ja.tipo==='entregas'?'entrega(s)':'registro(s)'}\n\n`
-      + (cfg.tipo==='entregas'
-          ? 'Importar de novo SOMA as entregas e dobra o valor a pagar dos motoristas.\n\nImportar mesmo assim?'
-          : 'Importar de novo duplica os registros.\n\nImportar mesmo assim?');
-    if(!confirm(msg)) { closeModal(); toast('Importação cancelada — o relatório já estava importado','ok'); return; }
+    toast('Erro: este relatório já foi importado em '+quando+'. Exclua o período antes de subir uma versão atualizada.','err');
+    return;
   }
   if(cfg.tipo==='entregas'){
     if(sel.motorista<0){ toast('Selecione a coluna de motorista','err'); return; }
@@ -2287,12 +2360,8 @@ function doImport(k,cfg,sel,body){
         if(!dataOk(normDate(bruta))){ nRuins++; if(ruins.length<3) ruins.push((''+bruta).slice(0,24)); }
       }
       if(nRuins){
-        const msg=`⚠️ ${nRuins.toLocaleString('pt-BR')} linha(s) com DATA em formato não reconhecido\n\n`
-          + `Exemplos: ${ruins.join(' · ')}\n\n`
-          + `Essas entregas entrarão no período escolhido manualmente e NÃO receberão adicional de domingo/feriado, `
-          + `porque não é possível saber o dia da semana.\n\n`
-          + `Recomendado: cancelar, formatar a coluna como data na planilha e importar de novo.\n\nImportar mesmo assim?`;
-        if(!confirm(msg)){ closeModal(); toast('Importação cancelada — verifique a coluna de data','err'); return; }
+        toast('Erro: '+nRuins.toLocaleString('pt-BR')+' linha(s) possuem data inválida ('+ruins.join(' · ')+'). Corrija o relatório e tente novamente.','err');
+        return;
       }
     }
     // agrega por motorista × empresa × dia × cidade × período
