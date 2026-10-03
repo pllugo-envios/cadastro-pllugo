@@ -248,7 +248,11 @@
         <div class="toolbar">
           <div class="grow">
             <label class="lbl" style="margin-bottom:4px">Período</label>
-            <select class="fld sm" id="periodoSel"><option value="">Todos os períodos</option></select>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select class="fld sm" id="periodoSel" style="flex:1;min-width:210px"><option value="">Todos os períodos</option></select>
+              <button class="btn sm" id="btnExcluirPeriodo" disabled style="background:#fff;color:var(--red);border-color:#FECACA">🗑️ Excluir período</button>
+            </div>
+            <p class="panel-note" id="excluirPeriodoInfo" style="margin:5px 0 0">Selecione uma quinzena ou um mês inteiro para habilitar a exclusão.</p>
           </div>
           <div>
             <label class="lbl" style="margin-bottom:4px">Status</label>
@@ -1698,6 +1702,47 @@ const IMPORTS = {
   jt:    {titulo:'Relatório J&T', icon:'🟡', empresa:'J&T', tipo:'entregas'},
   imile: {titulo:'Relatório iMile', icon:'🔵', empresa:'iMile', tipo:'entregas'}
 };
+const IMPORT_UNITS = [
+  {key:'maua', label:'Mauá'},
+  {key:'ribeirao', label:'Ribeirão'}
+];
+function importUnitKey(v){
+  const n=norm(v||'').replace(/\s/g,'');
+  if(n.includes('RIBEIRAO')) return 'ribeirao';
+  if(n.includes('MAUA')) return 'maua';
+  return '';
+}
+function fmtPedidosMae(n){
+  const qtd=parseNum(n)||0;
+  return `${qtd.toLocaleString('pt-BR')} ${qtd===1?'pedido-mãe':'pedidos-mãe'}`;
+}
+function ultimaImportacaoUnidade(cfg, unidade){
+  const uk=importUnitKey(unidade);
+  return (S.imports||[]).slice().reverse().find(i=>
+    i.tipo==='entregas' && i.empresa===cfg.empresa && importUnitKey(i.unidade)===uk
+  ) || null;
+}
+function resumoImportacoesUnidade(cfg){
+  return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0 0 12px">
+    ${IMPORT_UNITS.map(un=>{
+      const u=ultimaImportacaoUnidade(cfg,un.key);
+      if(!u) return `<div style="border:1px dashed var(--border-strong);border-radius:12px;padding:10px 12px;background:var(--surface-2)">
+        <div style="font-size:11px;font-weight:800;color:var(--text-faint);text-transform:uppercase">${esc(un.label)}</div>
+        <div style="font-size:12px;color:var(--text-soft);margin-top:4px">Ainda não importado</div>
+      </div>`;
+      const quando=new Date(u.quando).toLocaleString('pt-BR');
+      const pedidos=(u.pedidosMae!=null?u.pedidosMae:u.total)||0;
+      return `<div style="border:1px solid #BBF7D0;border-radius:12px;padding:10px 12px;background:var(--green-soft)">
+        <div style="display:flex;justify-content:space-between;gap:6px;align-items:center">
+          <div style="font-size:11px;font-weight:800;color:var(--green);text-transform:uppercase">${esc(un.label)}</div>
+          <span class="badge green">✓ Concluído</span>
+        </div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);margin-top:5px">${fmtPedidosMae(pedidos)}</div>
+        <div style="font-size:11px;color:var(--text-soft);margin-top:3px">${esc(cfg.titulo)} · ${esc(quando)}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
 // dicionário de detecção de colunas (normalizado)
 const COL_HINTS = {
   motorista:['motorista','entregador','nome','driver','colaborador','parceiro','responsavel'],
@@ -1764,13 +1809,16 @@ function renderImportCards(){
   const host=$('#importGrid'); host.innerHTML='';
   Object.keys(IMPORTS).forEach(k=>{
     const cfg=IMPORTS[k];
-    const count = cfg.tipo==='entregas'? S.entregas.filter(e=> (cfg.empresa==='iMile')? /imile/i.test(e.empresa): !/imile/i.test(e.empresa)).length
+    const count = cfg.tipo==='entregas'? S.entregas.filter(e=> (cfg.empresa==='iMile')? /imile/i.test(e.empresa): !/imile/i.test(e.empresa)).reduce((s,e)=>s+(parseNum(e.qtd)||0),0)
                 : cfg.tipo==='extravios'? S.extravios.length
                 : S.drivers.length;
+    const countLabel=cfg.tipo==='entregas'?fmtPedidosMae(count)+' armazenados'
+                    : count.toLocaleString('pt-BR')+' '+(cfg.tipo==='motoristas'?'cadastrados':'extravios');
     const card=el(`<div class="panel">
       <div class="panel-head"><div><div class="panel-title">${cfg.icon} ${cfg.titulo}</div>
-        <h3>${count.toLocaleString('pt-BR')} ${cfg.tipo==='motoristas'?'cadastrados':(cfg.tipo==='extravios'?'extravios':'registros')}</h3></div>
+        <h3>${countLabel}</h3></div>
         ${count?`<button class="btn ghost sm" data-clear="${k}">Limpar</button>`:''}</div>
+      ${cfg.tipo==='entregas'?resumoImportacoesUnidade(cfg):''}
       <div class="dropzone" data-dz="${k}">
         <div class="dz-ico">⬆︎</div>
         <div class="dz-main">Solte o arquivo aqui ou clique para escolher</div>
@@ -2046,7 +2094,7 @@ function openMapper(k, rows){
   const opt=(sel)=> headers.map((h,i)=>`<option value="${i}" ${i===sel?'selected':''}>${esc(h)}</option>`).join('');
   const previewCols=need.filter(n=>detected[n]>-1);
   const fields=need.map(key=>{
-    const required = (key==='motorista'||key==='nome'||(cfg.tipo==='extravios'&&key==='pedido')||(cfg.tipo==='motoristas'&&key==='telefone'));
+    const required = (key==='motorista'||key==='nome'||(cfg.tipo==='entregas'&&key==='pedido')||(cfg.tipo==='extravios'&&key==='pedido')||(cfg.tipo==='motoristas'&&key==='telefone'));
     return `<div><label class="lbl">${labels[key]} ${required?'<span style="color:var(--brand)">*</span>':'<span style="color:var(--text-faint)">(opcional)</span>'}</label>
       <select class="fld sm" data-map="${key}"><option value="-1">— não usar —</option>${opt(detected[key])}</select></div>`;
   }).join('');
@@ -2056,11 +2104,19 @@ function openMapper(k, rows){
     extraNote = `<p class="panel-note">Sem <b>Data do desconto</b> mapeada, os extravios entram na quinzena que está aberta em <b>Fechamentos</b> (<b>${esc(periodoLabel(S.periodoSel))}</b>). Com a data mapeada, o vínculo segue a regra configurada em Extravios automáticos.</p>`;
   }
   if(cfg.tipo==='entregas'){
-    extraNote = `<p class="panel-note">Empresa fixada como <b>${cfg.empresa}</b>. Sem coluna de quantidade, cada linha conta como 1 entrega. Se a coluna de <b>pedido</b> for informada, volumes do mesmo pedido (ex.: <code>-001</code>, <code>-002</code>) contam como <b>1 entrega só</b> (pedido-mãe).</p>`;
+    extraNote = `<p class="panel-note">Empresa fixada como <b>${cfg.empresa}</b>. A coluna de <b>pedido</b> é obrigatória: volumes do mesmo pedido (ex.: <code>-001</code>, <code>-002</code>) contam como <b>1 pedido-mãe</b>.</p>`;
   }
 
   modal(`<h3>${cfg.icon} Importar — ${cfg.titulo}</h3>
     <p class="mh">${body.length.toLocaleString('pt-BR')} linha(s) detectada(s). ${presetName?`<span class="badge green">✓ Formato ${esc(presetName)} reconhecido</span> `:''}Confirme o mapeamento das colunas:</p>
+    ${cfg.tipo==='entregas'?`<div class="panel" style="padding:12px 14px;background:var(--surface-2);margin-bottom:12px">
+      <label class="lbl">Unidade do relatório <span style="color:var(--brand)">*</span></label>
+      <select class="fld sm" id="importUnidade">
+        <option value="">— selecione a unidade —</option>
+        ${IMPORT_UNITS.map(un=>`<option value="${un.key}">${esc(un.label)}</option>`).join('')}
+      </select>
+      <p class="panel-note" style="margin:7px 0 0">A unidade ficará registrada junto com a data, o horário e a quantidade de pedidos-mãe desta importação.</p>
+    </div>`:''}
     <div class="field-row">${fields}</div>
     ${extraNote||''}
     ${cfg.tipo==='entregas'?'<div id="periodoBox" style="margin-top:6px"></div>':''}
@@ -2116,6 +2172,11 @@ function openMapper(k, rows){
   $('#mImport').onclick=()=>{
     const sel=refreshPrev();
     const pf=$('#periodoFallback'); if(pf) sel.periodoFallback=pf.value;
+    const iu=$('#importUnidade');
+    if(iu){
+      const un=IMPORT_UNITS.find(x=>x.key===iu.value);
+      sel.unidade=un?un.label:'';
+    }
     doImport(k, cfg, sel, body);
   };
 }
@@ -2139,18 +2200,19 @@ function importSig(cfg, sel, body){
 function importJaFeita(sig){
   return (S.imports||[]).find(i=> i.sig===sig);
 }
-function registraImport(sig, cfg, body, resumo, delta){
+function registraImport(sig, cfg, body, resumo, delta, meta){
   if(!S.imports) S.imports=[];
-  S.imports.push({ sig, tipo:cfg.tipo, empresa:cfg.empresa||'', quando:new Date().toISOString(),
-                   linhas:body.length, total:resumo });
+  const registro=Object.assign({ sig, tipo:cfg.tipo, empresa:cfg.empresa||'', quando:new Date().toISOString(),
+                   linhas:body.length, total:resumo }, meta||{});
+  S.imports.push(registro);
   if(S.imports.length>60) S.imports=S.imports.slice(-60);   // histórico enxuto
-  S.ultimoImport = Object.assign({ sig, tipo:cfg.tipo, empresa:cfg.empresa||'',
-                   quando:new Date().toISOString(), linhas:body.length, total:resumo }, delta||{});
+  S.ultimoImport = Object.assign({}, registro, delta||{});
 }
 function desfazerUltimoImport(){
   const u=S.ultimoImport;
   if(!u){ toast('Nenhuma importação para desfazer','err'); return; }
-  if(!confirm(`Desfazer a última importação?\n\n${u.tipo==='entregas'?'Entregas':'Registros'}: ${u.total}\nQuando: ${new Date(u.quando).toLocaleString('pt-BR')}\n\nOs dados voltam ao estado anterior a essa importação.`)) return;
+  const qtd=u.tipo==='entregas' && u.pedidosMae!=null ? u.pedidosMae : u.total;
+  if(!confirm(`Desfazer a última importação?\n\n${u.tipo==='entregas'?'Pedidos-mãe':'Registros'}: ${qtd}${u.unidade?'\nUnidade: '+u.unidade:''}\nQuando: ${new Date(u.quando).toLocaleString('pt-BR')}\n\nOs dados voltam ao estado anterior a essa importação.`)) return;
   if(u.tipo==='entregas' && Array.isArray(u.deltas)){
     u.deltas.forEach(d=>{
       const e=S.entregas.find(x=>x.id===d.id);
@@ -2174,18 +2236,22 @@ function renderUltImport(){
   if(!u){ box.innerHTML=''; box.style.display='none'; return; }
   box.style.display='';
   const quando=new Date(u.quando).toLocaleString('pt-BR');
-  const qtd=(u.total||0).toLocaleString('pt-BR');
+  const qtd=u.tipo==='entregas' && u.pedidosMae!=null ? u.pedidosMae : (u.total||0);
+  const unidade=u.unidade?` · ${esc(u.unidade)}`:'';
   box.innerHTML=`<div class="panel" style="margin-bottom:18px">
     <div class="panel-head"><div>
       <div class="panel-title">↩︎ Última importação</div>
-      <h3>${esc((u.empresa||u.tipo||'').toString())} · ${qtd} ${u.tipo==='entregas'?'entrega(s)':'registro(s)'}</h3>
+      <h3>${esc((u.empresa||u.tipo||'').toString())}${unidade} · ${u.tipo==='entregas'?fmtPedidosMae(qtd):qtd.toLocaleString('pt-BR')+' registro(s)'}</h3>
     </div><button class="btn secondary sm" id="btnDesfazerImport">Desfazer</button></div>
     <p class="panel-note" style="margin-top:0">Importado em ${esc(quando)} · ${u.linhas.toLocaleString('pt-BR')} linha(s) do arquivo. Se importou o relatório errado ou por engano, desfaça aqui — as quantidades voltam exatamente ao que eram.</p>
   </div>`;
   const b=$('#btnDesfazerImport'); if(b) b.addEventListener('click', desfazerUltimoImport);
 }
 function doImport(k,cfg,sel,body){
-  let added=0, totalQ=0, volsIgnorados=0;
+  let added=0, totalQ=0, volsIgnorados=0, pedidosMaeImportados=0, pedidosSemId=0;
+  if(cfg.tipo==='entregas' && !sel.unidade){
+    toast('Selecione a unidade do relatório: Mauá ou Ribeirão','err'); return;
+  }
   const sig=importSig(cfg,sel,body);
   const ja=importJaFeita(sig);
   if(ja){
@@ -2198,6 +2264,7 @@ function doImport(k,cfg,sel,body){
   }
   if(cfg.tipo==='entregas'){
     if(sel.motorista<0){ toast('Selecione a coluna de motorista','err'); return; }
+    if(sel.pedido<0){ toast('Selecione a coluna de pedido para contar somente os pedidos-mãe','err'); return; }
     // PROTEÇÃO: se a coluna de Quantidade foi apontada para números gigantes (ex.: waybill/ID
     // do pedido), os totais corrompem. Relatórios J&T/iMile não têm quantidade (1 linha = 1 entrega).
     if(sel.qtd>-1){
@@ -2230,22 +2297,25 @@ function doImport(k,cfg,sel,body){
     }
     // agrega por motorista × empresa × dia × cidade × período
     const groups=new Map();
-    const seen = sel.pedido>-1 ? new Set() : null;   // dedup por pedido-mãe (volumes -001/-002…)
+    const seen = new Set();                         // dedup por pedido-mãe (volumes -001/-002…)
+    const periodosImportados=new Set();
     body.forEach(r=>{
       const nome=(r[sel.motorista]==null?'':''+r[sel.motorista]).trim(); if(!nome) return;
-      if(seen){
-        const ped=(r[sel.pedido]==null?'':''+r[sel.pedido]).trim();
-        const parent=ped.replace(/-\d{1,3}$/,'');
-        if(parent){ if(seen.has(parent)){ volsIgnorados++; return; } seen.add(parent); }
-      }
+      const ped=(r[sel.pedido]==null?'':''+r[sel.pedido]).trim();
+      const parent=ped.replace(/-\d{1,3}$/,'').trim();
+      if(!parent){ pedidosSemId++; return; }
+      if(seen.has(parent)){ volsIgnorados++; return; }
+      seen.add(parent); pedidosMaeImportados++;
       const qtd = sel.qtd>-1 ? (parseNum(r[sel.qtd])||0) : 1;
       const data = sel.data>-1 ? normDate(r[sel.data]) : '';
       const carreg = sel.carregamento>-1 ? normDate(r[sel.carregamento]) : '';
       const cidade = sel.cidade>-1 ? (r[sel.cidade]==null?'':''+r[sel.cidade]).trim() : '';
       const periodo = quinzenaFromDate(data) || fallbackP;   // quinzena da própria entrega
+      if(periodo) periodosImportados.add(periodo);
       const key=nome+'\u0001'+cfg.empresa+'\u0001'+data+'\u0001'+carreg+'\u0001'+cidade+'\u0001'+periodo;
       groups.set(key,(groups.get(key)||0)+qtd);
     });
+    if(!pedidosMaeImportados){ toast('Nenhum pedido-mãe válido foi encontrado no relatório','err'); return; }
     const deltas=[];
     groups.forEach((qtd,key)=>{
       const [motorista,empresa,data,dataCarregamento,cidade,periodo]=key.split('\u0001');
@@ -2254,7 +2324,11 @@ function doImport(k,cfg,sel,body){
       else { const nova={id:uid(),motorista,empresa,data,dataCarregamento,cidade,qtd,periodo}; S.entregas.push(nova); deltas.push({id:nova.id,qtd}); }
       added++; totalQ+=qtd;
     });
-    registraImport(sig, cfg, body, totalQ, {deltas});
+    registraImport(sig, cfg, body, totalQ, {deltas}, {
+      unidade:sel.unidade,
+      pedidosMae:pedidosMaeImportados,
+      periodos:Array.from(periodosImportados)
+    });
     // passa a visualizar a quinzena recém-importada
     if(fallbackP){ S.periodoSel = fallbackP; S.ref = quinzenaLabel(fallbackP); }
   } else if(cfg.tipo==='extravios'){
@@ -2310,7 +2384,7 @@ function doImport(k,cfg,sel,body){
   }
   save(); closeModal();
   renderImportCards(); renderUltImport(); renderFech(); renderDrivers(); refreshPeriodoSelector();
-  if(cfg.tipo==='entregas') toast(totalQ.toLocaleString('pt-BR')+' entregas'+(volsIgnorados?' · '+volsIgnorados+' volumes-filho ignorados':'')+' ('+added+' grupos)','ok');
+  if(cfg.tipo==='entregas') toast('✓ Importação concluída · '+cfg.empresa+' · '+sel.unidade+' · '+fmtPedidosMae(pedidosMaeImportados)+(volsIgnorados?' · '+volsIgnorados+' volumes-filho ignorados':'')+(pedidosSemId?' · '+pedidosSemId+' linha(s) sem pedido ignorada(s)':''),'ok');
   else toast(added+' registro(s) importado(s)','ok');
 }
 
@@ -2898,6 +2972,7 @@ function refreshPeriodoSelector(){
   sel.value=S.periodoSel||'';
   S.ref = periodoLabel(S.periodoSel);
   atualizaRefPill();
+  atualizaBotaoExcluirPeriodo();
 }
 function atualizaRefPill(){
   const pill=$('#refPill'); if(!pill) return;
@@ -2905,6 +2980,74 @@ function atualizaRefPill(){
   const mm=(''+S.periodoSel).match(/^M:(\d{4})-(\d{2})$/);
   if(mm){ pill.textContent = periodoLabel(S.periodoSel); return; }
   pill.textContent = quinzenaLabel(S.periodoSel)+' · pagto '+quinzenaPagamento(S.periodoSel);
+}
+function periodoSelecionadoInclui(key, sel){
+  if(!key || !sel) return false;
+  if(key===sel) return true;
+  const mm=(''+sel).match(/^M:(\d{4})-(\d{2})$/);
+  return !!(mm && (''+key).startsWith(mm[1]+'-'+mm[2]+'-'));
+}
+function atualizaBotaoExcluirPeriodo(){
+  const btn=$('#btnExcluirPeriodo'), info=$('#excluirPeriodoInfo');
+  if(!btn) return;
+  const ativo=!!S.periodoSel;
+  btn.disabled=!ativo;
+  btn.style.opacity=ativo?'1':'.55';
+  if(info) info.textContent=ativo
+    ? 'A exclusão removerá todos os dados de '+periodoLabel(S.periodoSel)+'.'
+    : 'Selecione uma quinzena ou um mês inteiro para habilitar a exclusão.';
+}
+function excluirPeriodoSelecionado(){
+  const sel=S.periodoSel;
+  if(!sel){ toast('Selecione primeiro a quinzena ou o mês que deseja excluir','err'); return; }
+  const inclui=k=>periodoSelecionadoInclui(k,sel);
+  const entregas=S.entregas.filter(e=>inclui(e.periodo||''));
+  const qtdEntregas=entregas.reduce((s,e)=>s+(parseNum(e.qtd)||0),0);
+  const qtdExtravios=S.extravios.filter(x=>inclui(x.periodo||'')).length;
+  const qtdFech=(S.fechamentos||[]).filter(f=>inclui(f.periodo||'')).length;
+  const ajusteKeys=Object.keys(S.ajustes||{}).filter(k=>inclui(k.split('\u0001')[0]||''));
+  const statusKeys=Object.keys(S.statusPag||{}).filter(k=>inclui(k.split('\u0001')[0]||''));
+  const importsRemoviveis=(S.imports||[]).filter(i=>{
+    const ps=Array.isArray(i.periodos)?i.periodos.filter(Boolean):[];
+    return !ps.length || ps.every(inclui); // legados não tinham período: remove apenas a trava de duplicidade
+  });
+  const total=qtdEntregas+qtdExtravios+qtdFech+ajusteKeys.length+statusKeys.length;
+  modal(`<h3 style="color:var(--red)">🗑️ Excluir ${esc(periodoLabel(sel))}</h3>
+    <p class="mh">Esta ação remove todo o conteúdo operacional do período selecionado para permitir uma nova importação:</p>
+    <div class="panel" style="padding:12px 14px;background:var(--red-soft);border-color:#FECACA">
+      <div class="chips">
+        <span class="badge red">${qtdEntregas.toLocaleString('pt-BR')} pedidos/entregas</span>
+        <span class="badge red">${qtdExtravios.toLocaleString('pt-BR')} extravios</span>
+        <span class="badge red">${qtdFech.toLocaleString('pt-BR')} fechamentos salvos</span>
+        <span class="badge red">${(ajusteKeys.length+statusKeys.length).toLocaleString('pt-BR')} ajustes/status</span>
+      </div>
+    </div>
+    <p class="mh" style="color:var(--red)"><b>Esta ação não pode ser desfeita.</b> Exporte um backup antes se precisar preservar esses dados.</p>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
+      <button class="btn" id="mExcluirPeriodo" style="background:var(--red);color:#fff;border-color:var(--red)">Excluir período inteiro</button>
+    </div>`);
+  $('#mExcluirPeriodo').onclick=()=>{
+    S.entregas=S.entregas.filter(e=>!inclui(e.periodo||''));
+    S.extravios=S.extravios.filter(x=>!inclui(x.periodo||''));
+    S.fechamentos=(S.fechamentos||[]).filter(f=>!inclui(f.periodo||''));
+    ajusteKeys.forEach(k=>delete S.ajustes[k]);
+    statusKeys.forEach(k=>delete S.statusPag[k]);
+
+    // Relatórios de um único período deixam de bloquear a reimportação. Relatórios
+    // mistos permanecem no histórico para evitar duplicar as outras quinzenas.
+    const remover=new Set(importsRemoviveis.map(i=>i.sig+'\u0001'+i.quando));
+    S.imports=(S.imports||[]).filter(i=>!remover.has(i.sig+'\u0001'+i.quando));
+    if(S.ultimoImport){
+      const ps=Array.isArray(S.ultimoImport.periodos)?S.ultimoImport.periodos.filter(Boolean):[];
+      if(!ps.length || ps.every(inclui)) S.ultimoImport=null;
+    }
+    S.periodoSel=''; S.ref=''; S.filtroOrigem='';
+    save(); closeModal(); refreshPeriodoSelector(); renderFech(); renderImportCards(); renderUltImport(); renderHist();
+    toast(total
+      ? '✓ Período excluído · agora você pode importar o relatório atualizado'
+      : 'Período sem movimentações — nenhuma informação precisou ser removida','ok');
+  };
 }
 
 function bind(){
@@ -2914,8 +3057,10 @@ function bind(){
     S.periodoSel=e.target.value;
     S.ref = periodoLabel(S.periodoSel);
     atualizaRefPill();
+    atualizaBotaoExcluirPeriodo();
     save(); renderFech();
   });
+  $('#btnExcluirPeriodo').addEventListener('click',excluirPeriodoSelecionado);
   // filtro Oxpay (todos / com / sem)
   const oxLogo=$('#oxFilterLogo'); if(oxLogo) oxLogo.src=OXPAY_LOGO;
   const oxSel=$('#fltOxpay');
