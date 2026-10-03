@@ -287,7 +287,7 @@
         <div class="section-title">
           <div>
             <h2>Importar relatórios</h2>
-            <p>Importe os relatórios da J&amp;T e da iMile (entregas). Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. A ferramenta identifica automaticamente a <b>unidade</b> (Mauá/Ribeirão), a <b>quinzena</b> e os pedidos-mãe, sem tela de confirmação.</p>
+            <p>Importe os relatórios da J&amp;T e da iMile (entregas). Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. A ferramenta identifica automaticamente a <b>unidade</b> (Mauá/Ribeirão), a <b>quinzena</b> e os pedidos, sem tela de confirmação.</p>
           </div>
         </div>
         <div id="ultImportBox" style="display:none"></div>
@@ -1712,9 +1712,9 @@ function importUnitKey(v){
   if(n.includes('MAUA')) return 'maua';
   return '';
 }
-function fmtPedidosMae(n){
+function fmtPedidos(n){
   const qtd=parseNum(n)||0;
-  return `${qtd.toLocaleString('pt-BR')} ${qtd===1?'pedido-mãe':'pedidos-mãe'}`;
+  return `${qtd.toLocaleString('pt-BR')} ${qtd===1?'pedido':'pedidos'}`;
 }
 function ultimaImportacaoUnidade(cfg, unidade){
   const uk=importUnitKey(unidade);
@@ -1737,7 +1737,7 @@ function resumoImportacoesUnidade(cfg){
           <div style="font-size:11px;font-weight:800;color:var(--green);text-transform:uppercase">${esc(un.label)}</div>
           <span class="badge green">✓ Concluído</span>
         </div>
-        <div style="font-size:15px;font-weight:800;color:var(--text);margin-top:5px">${fmtPedidosMae(pedidos)}</div>
+        <div style="font-size:15px;font-weight:800;color:var(--text);margin-top:5px">${fmtPedidos(pedidos)}</div>
         <div style="font-size:11px;color:var(--text-soft);margin-top:3px">${esc(cfg.titulo)} · ${esc(quando)}</div>
       </div>`;
     }).join('')}
@@ -1786,14 +1786,20 @@ function findHeader(headers, name){
   const target=norm(name);
   const H=headers.map(norm);
   let i=H.indexOf(target); if(i>-1) return i;
-  i=H.findIndex(h=>h===target); if(i>-1) return i;
-  return H.findIndex(h=>h.includes(target));
+  // Alguns XLSX exportados pela J&T quebram o título "Número de pedido JMS"
+  // em duas células: "Número de pedid" + "o JMS". Aceita o fragmento longo
+  // como o mesmo cabeçalho, sem flexibilizar para pedaços curtos/genéricos.
+  i=H.findIndex(h=>h.length>=8 && (h.includes(target)||target.includes(h)));
+  return i;
+}
+function headerMatches(header, expected){
+  const h=norm(header), e=norm(expected);
+  return h===e || (Math.min(h.length,e.length)>=8 && (h.includes(e)||e.includes(h)));
 }
 function applyPreset(tipo, headers, detected){
-  const Hn=headers.map(norm);
   const presets=FORMAT_PRESETS[tipo]||[];
   for(const p of presets){
-    if(p.match.every(m=> Hn.some(h=> h.includes(norm(m))))){
+    if(p.match.every(m=> headers.some(h=>headerMatches(h,m)))){
       // o preset é autoritativo: usa as colunas dele; zera os campos que ele não define
       Object.keys(detected).forEach(field=>{
         if(p.cols[field]!=null){ const idx=findHeader(headers, p.cols[field]); if(idx>-1) detected[field]=idx; }
@@ -1807,41 +1813,53 @@ function applyPreset(tipo, headers, detected){
 }
 function unidadeEmTexto(v){
   const n=norm(v||'');
-  const maua=/\bMAUA\b/.test(n);
-  const ribeirao=/\bRIBEIRAO(?:\s+PIRES)?\b/.test(n);
+  // Códigos observados nos relatórios: MUA/MAUA e RBP/FRB. RBP é a
+  // abreviação usada pela base de Ribeirão no arquivo reduzido da J&T.
+  const maua=/\bMAUA\b|\bMUA\b/.test(n);
+  const ribeirao=/\bRIBEIRAO(?:\s+(?:PRETO|PIRES))?\b|\bRBP\b|FRB(?:\b|_)/.test(n);
   if(maua&&!ribeirao) return 'maua';
   if(ribeirao&&!maua) return 'ribeirao';
   return '';
 }
 function detectImportUnit(headers, body, sourceName, preHeaderRows){
-  const score={maua:0,ribeirao:0};
-  const add=(v,peso)=>{ const k=unidadeEmTexto(v); if(k) score[k]+=peso; };
+  const contar=(indexes,limite)=>{
+    const score={maua:0,ribeirao:0};
+    const amostra=body.slice(0,limite||5000);
+    indexes.forEach(i=>amostra.forEach(r=>{ const k=unidadeEmTexto(r[i]); if(k) score[k]++; }));
+    return score;
+  };
+  const decidir=score=>{
+    if(score.maua===score.ribeirao) return '';
+    return score.maua>score.ribeirao?'Mauá':'Ribeirão';
+  };
 
-  // O nome do arquivo e as linhas de título são os sinais mais confiáveis.
-  add(sourceName,1000);
-  (preHeaderRows||[]).forEach(r=>(r||[]).forEach(v=>add(v,100)));
-
-  // Em especial no iMile, "Scan station" informa a base. Também cobre as
-  // variações usuais de J&T: unidade, filial, base, hub, estação e origem.
+  // 1) Fonte autoritativa: a coluna de base/estação do próprio relatório.
+  // Não usa "Origem", pois essa coluna na J&T contém a cidade do remetente.
+  const baseCols=[];
   headers.forEach((h,i)=>{
     const n=norm(h);
-    const ehDestino=/DESTINO|DESTINATION|RECIPIENT|CIDADE|CITY|MUNICIPIO|BAIRRO/.test(n);
-    const ehUnidade=/UNIDADE|FILIAL|BASE|AGENCIA|HUB|ESTACAO|STATION|ORIGEM|ORIGIN|SITE|CENTRO DE DISTRIBUICAO|DISTRIBUTION CENTER|SORTING CENTER|OPERACAO/.test(n);
-    if(!ehDestino && ehUnidade) body.slice(0,2000).forEach(r=>add(r[i],10));
+    if(/BASE DE ENTREGA|PDD DE ENTREGA|NOME DA BASE|UNIDADE|FILIAL|AGENCIA|HUB|ESTACAO|SCAN STATION|DELIVERY STATION|SORTING CENTER|DISTRIBUTION CENTER/.test(n)) baseCols.push(i);
   });
+  const baseScore=contar(baseCols,5000);
+  if(baseScore.maua||baseScore.ribeirao) return decidir(baseScore);
+
+  // 2) Nome do arquivo ou linhas de título, quando o relatório informa a base ali.
+  const metaScore={maua:0,ribeirao:0};
+  const addMeta=v=>{ const k=unidadeEmTexto(v); if(k) metaScore[k]++; };
+  addMeta(sourceName);
+  (preHeaderRows||[]).forEach(r=>(r||[]).forEach(addMeta));
+  if(metaScore.maua||metaScore.ribeirao) return decidir(metaScore);
 
   // Último recurso para relatórios sem coluna de base: usa a região dominante
   // da cidade de destino. Rio Grande da Serra pertence à operação de Ribeirão.
-  if(score.maua===0 && score.ribeirao===0){
-    const cidade=detectCol(headers,'cidade');
-    if(cidade>-1) body.forEach(r=>{
-      const reg=classificaRegiao(r[cidade]);
-      if(reg==='Mauá') score.maua++;
-      else if(reg==='Ribeirão Pires'||reg==='Rio Grande da Serra') score.ribeirao++;
-    });
-  }
-  if(score.maua===score.ribeirao) return '';
-  return score.maua>score.ribeirao?'Mauá':'Ribeirão';
+  const score={maua:0,ribeirao:0};
+  const cidade=detectCol(headers,'cidade');
+  if(cidade>-1) body.forEach(r=>{
+    const reg=classificaRegiao(r[cidade]);
+    if(reg==='Mauá') score.maua++;
+    else if(reg==='Ribeirão Pires'||reg==='Rio Grande da Serra') score.ribeirao++;
+  });
+  return decidir(score);
 }
 function processRowsAutomatically(k, rows, sourceName){
   const cfg=IMPORTS[k];
@@ -1858,7 +1876,7 @@ function processRowsAutomatically(k, rows, sourceName){
   applyPreset(cfg.tipo,headers,sel);
 
   if(cfg.tipo==='entregas'){
-    // J&T e iMile: cada pedido-mãe vale 1. Não usa uma eventual coluna numérica
+  // J&T e iMile: cada pedido principal vale 1. Não usa uma eventual coluna numérica
     // que possa ser confundida com quantidade.
     sel.qtd=-1;
     if(sel.motorista<0){ toast('Erro: não foi possível identificar a coluna de motorista','err'); return; }
@@ -1888,11 +1906,13 @@ function renderImportCards(){
     const count = cfg.tipo==='entregas'? S.entregas.filter(e=> (cfg.empresa==='iMile')? /imile/i.test(e.empresa): !/imile/i.test(e.empresa)).reduce((s,e)=>s+(parseNum(e.qtd)||0),0)
                 : cfg.tipo==='extravios'? S.extravios.length
                 : S.drivers.length;
-    const countLabel=cfg.tipo==='entregas'?fmtPedidosMae(count)+' armazenados'
+    // O total acumulado de pedidos não é exibido: cada cartão mostra somente o
+    // registro mais recente de Mauá e Ribeirão logo abaixo.
+    const countLabel=cfg.tipo==='entregas'?''
                     : count.toLocaleString('pt-BR')+' '+(cfg.tipo==='motoristas'?'cadastrados':'extravios');
     const card=el(`<div class="panel">
       <div class="panel-head"><div><div class="panel-title">${cfg.icon} ${cfg.titulo}</div>
-        <h3>${countLabel}</h3></div>
+        ${countLabel?`<h3>${countLabel}</h3>`:''}</div>
         ${count?`<button class="btn ghost sm" data-clear="${k}">Limpar</button>`:''}</div>
       ${cfg.tipo==='entregas'?resumoImportacoesUnidade(cfg):''}
       <div class="dropzone" data-dz="${k}">
@@ -1933,7 +1953,13 @@ function clearDataset(k){
     <div class="modal-actions"><button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
     <button class="btn primary" id="mClr">Limpar</button></div>`);
   $('#mClr').onclick=()=>{
-    if(cfg.tipo==='entregas') S.entregas=S.entregas.filter(e=> (cfg.empresa==='iMile')? !/imile/i.test(e.empresa): /imile/i.test(e.empresa));
+    if(cfg.tipo==='entregas'){
+      S.entregas=S.entregas.filter(e=> (cfg.empresa==='iMile')? !/imile/i.test(e.empresa): /imile/i.test(e.empresa));
+      // Limpar o relatório também remove suas travas de duplicidade e seus cartões
+      // de última importação. Assim o mesmo arquivo pode ser reenviado no reteste.
+      S.imports=(S.imports||[]).filter(i=>!(i.tipo==='entregas' && i.empresa===cfg.empresa));
+      if(S.ultimoImport && S.ultimoImport.tipo==='entregas' && S.ultimoImport.empresa===cfg.empresa) S.ultimoImport=null;
+    }
     else if(cfg.tipo==='extravios') S.extravios=[];
     else if(cfg.tipo==='motoristas'){ /* não apaga cadastro manual; só avisa */ toast('Cadastro é mantido — edite na aba Motoristas','');closeModal();return; }
     save();closeModal();renderImportCards();renderFech();renderDrivers();toast('Dados removidos','ok');
@@ -2180,7 +2206,7 @@ function openMapper(k, rows){
     extraNote = `<p class="panel-note">Sem <b>Data do desconto</b> mapeada, os extravios entram na quinzena que está aberta em <b>Fechamentos</b> (<b>${esc(periodoLabel(S.periodoSel))}</b>). Com a data mapeada, o vínculo segue a regra configurada em Extravios automáticos.</p>`;
   }
   if(cfg.tipo==='entregas'){
-    extraNote = `<p class="panel-note">Empresa fixada como <b>${cfg.empresa}</b>. A coluna de <b>pedido</b> é obrigatória: volumes do mesmo pedido (ex.: <code>-001</code>, <code>-002</code>) contam como <b>1 pedido-mãe</b>.</p>`;
+    extraNote = `<p class="panel-note">Empresa fixada como <b>${cfg.empresa}</b>. A coluna de <b>pedido</b> é obrigatória: volumes do mesmo pedido (ex.: <code>-001</code>, <code>-002</code>) contam como <b>1 pedido</b>.</p>`;
   }
 
   modal(`<h3>${cfg.icon} Importar — ${cfg.titulo}</h3>
@@ -2191,7 +2217,7 @@ function openMapper(k, rows){
         <option value="">— selecione a unidade —</option>
         ${IMPORT_UNITS.map(un=>`<option value="${un.key}">${esc(un.label)}</option>`).join('')}
       </select>
-      <p class="panel-note" style="margin:7px 0 0">A unidade ficará registrada junto com a data, o horário e a quantidade de pedidos-mãe desta importação.</p>
+      <p class="panel-note" style="margin:7px 0 0">A unidade ficará registrada junto com a data, o horário e a quantidade de pedidos desta importação.</p>
     </div>`:''}
     <div class="field-row">${fields}</div>
     ${extraNote||''}
@@ -2288,7 +2314,7 @@ function desfazerUltimoImport(){
   const u=S.ultimoImport;
   if(!u){ toast('Nenhuma importação para desfazer','err'); return; }
   const qtd=u.tipo==='entregas' && u.pedidosMae!=null ? u.pedidosMae : u.total;
-  if(!confirm(`Desfazer a última importação?\n\n${u.tipo==='entregas'?'Pedidos-mãe':'Registros'}: ${qtd}${u.unidade?'\nUnidade: '+u.unidade:''}\nQuando: ${new Date(u.quando).toLocaleString('pt-BR')}\n\nOs dados voltam ao estado anterior a essa importação.`)) return;
+  if(!confirm(`Desfazer a última importação?\n\n${u.tipo==='entregas'?'Pedidos':'Registros'}: ${qtd}${u.unidade?'\nUnidade: '+u.unidade:''}\nQuando: ${new Date(u.quando).toLocaleString('pt-BR')}\n\nOs dados voltam ao estado anterior a essa importação.`)) return;
   if(u.tipo==='entregas' && Array.isArray(u.deltas)){
     u.deltas.forEach(d=>{
       const e=S.entregas.find(x=>x.id===d.id);
@@ -2317,7 +2343,7 @@ function renderUltImport(){
   box.innerHTML=`<div class="panel" style="margin-bottom:18px">
     <div class="panel-head"><div>
       <div class="panel-title">↩︎ Última importação</div>
-      <h3>${esc((u.empresa||u.tipo||'').toString())}${unidade} · ${u.tipo==='entregas'?fmtPedidosMae(qtd):qtd.toLocaleString('pt-BR')+' registro(s)'}</h3>
+      <h3>${esc((u.empresa||u.tipo||'').toString())}${unidade} · ${u.tipo==='entregas'?fmtPedidos(qtd):qtd.toLocaleString('pt-BR')+' registro(s)'}</h3>
     </div><button class="btn secondary sm" id="btnDesfazerImport">Desfazer</button></div>
     <p class="panel-note" style="margin-top:0">Importado em ${esc(quando)} · ${u.linhas.toLocaleString('pt-BR')} linha(s) do arquivo. Se importou o relatório errado ou por engano, desfaça aqui — as quantidades voltam exatamente ao que eram.</p>
   </div>`;
@@ -2337,7 +2363,7 @@ function doImport(k,cfg,sel,body){
   }
   if(cfg.tipo==='entregas'){
     if(sel.motorista<0){ toast('Selecione a coluna de motorista','err'); return; }
-    if(sel.pedido<0){ toast('Selecione a coluna de pedido para contar somente os pedidos-mãe','err'); return; }
+    if(sel.pedido<0){ toast('Selecione a coluna de pedido para contar somente os pedidos principais','err'); return; }
     // PROTEÇÃO: se a coluna de Quantidade foi apontada para números gigantes (ex.: waybill/ID
     // do pedido), os totais corrompem. Relatórios J&T/iMile não têm quantidade (1 linha = 1 entrega).
     if(sel.qtd>-1){
@@ -2366,7 +2392,7 @@ function doImport(k,cfg,sel,body){
     }
     // agrega por motorista × empresa × dia × cidade × período
     const groups=new Map();
-    const seen = new Set();                         // dedup por pedido-mãe (volumes -001/-002…)
+    const seen = new Set();                         // dedup por pedido principal (volumes -001/-002…)
     const periodosImportados=new Set();
     body.forEach(r=>{
       const nome=(r[sel.motorista]==null?'':''+r[sel.motorista]).trim(); if(!nome) return;
@@ -2384,7 +2410,7 @@ function doImport(k,cfg,sel,body){
       const key=nome+'\u0001'+cfg.empresa+'\u0001'+data+'\u0001'+carreg+'\u0001'+cidade+'\u0001'+periodo;
       groups.set(key,(groups.get(key)||0)+qtd);
     });
-    if(!pedidosMaeImportados){ toast('Nenhum pedido-mãe válido foi encontrado no relatório','err'); return; }
+    if(!pedidosMaeImportados){ toast('Nenhum pedido válido foi encontrado no relatório','err'); return; }
     const deltas=[];
     groups.forEach((qtd,key)=>{
       const [motorista,empresa,data,dataCarregamento,cidade,periodo]=key.split('\u0001');
@@ -2453,7 +2479,7 @@ function doImport(k,cfg,sel,body){
   }
   save(); closeModal();
   renderImportCards(); renderUltImport(); renderFech(); renderDrivers(); refreshPeriodoSelector();
-  if(cfg.tipo==='entregas') toast('✓ Importação concluída · '+cfg.empresa+' · '+sel.unidade+' · '+fmtPedidosMae(pedidosMaeImportados)+(volsIgnorados?' · '+volsIgnorados+' volumes-filho ignorados':'')+(pedidosSemId?' · '+pedidosSemId+' linha(s) sem pedido ignorada(s)':''),'ok');
+  if(cfg.tipo==='entregas') toast('✓ Importação concluída · '+cfg.empresa+' · '+sel.unidade+' · '+fmtPedidos(pedidosMaeImportados)+(volsIgnorados?' · '+volsIgnorados+' volumes-filho ignorados':'')+(pedidosSemId?' · '+pedidosSemId+' linha(s) sem pedido ignorada(s)':''),'ok');
   else toast(added+' registro(s) importado(s)','ok');
 }
 
@@ -3085,7 +3111,7 @@ function excluirPeriodoSelecionado(){
     <p class="mh">Esta ação remove todo o conteúdo operacional do período selecionado para permitir uma nova importação:</p>
     <div class="panel" style="padding:12px 14px;background:var(--red-soft);border-color:#FECACA">
       <div class="chips">
-        <span class="badge red">${qtdEntregas.toLocaleString('pt-BR')} pedidos/entregas</span>
+        <span class="badge red">${qtdEntregas.toLocaleString('pt-BR')} pedidos</span>
         <span class="badge red">${qtdExtravios.toLocaleString('pt-BR')} extravios</span>
         <span class="badge red">${qtdFech.toLocaleString('pt-BR')} fechamentos salvos</span>
         <span class="badge red">${(ajusteKeys.length+statusKeys.length).toLocaleString('pt-BR')} ajustes/status</span>
