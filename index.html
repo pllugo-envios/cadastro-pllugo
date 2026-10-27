@@ -635,7 +635,7 @@
         </ul>
         <p class="info-note">Enquanto a parceria estiver ativa, sempre haverá uma quinzena em carência aguardando a data de pagamento. Em caso de encerramento, esse saldo é quitado normalmente no calendário previsto.</p>
       </div>
-      <p class="info-p small">Os pagamentos são feitos via PIX na chave informada neste cadastro. Parceiros MEI devem emitir a nota fiscal (NFS-e) conforme orientação da equipe financeira. Descontos por extravio, avaria ou falta de comprovação são aplicados no repasse da quinzena correspondente.</p>
+      <p class="info-p small">Os pagamentos são realizados exclusivamente em conta de pagamento vinculada ao CNPJ no aplicativo Oxpay. Os parceiros devem emitir a Nota Fiscal de Serviços Eletrônica (NFS-e), conforme orientação da equipe financeira. Descontos por extravio, avaria ou ausência de comprovação serão aplicados sempre no pagamento.</p>
       <div class="checkbox-row ciencia">
         <input type="checkbox" id="ci_pag">
         <label for="ci_pag">Li e entendi o fechamento quinzenal, as datas de pagamento e a defasagem de uma quinzena.</label>
@@ -1219,12 +1219,12 @@ async function buscarCep() {
 // ================================================
 // COMPROVANTE DE CIENCIA E CONSENTIMENTO
 // ================================================
-const TERMO_VERSAO = 'v2 · ago/2026';
+const TERMO_VERSAO = 'v3 · out/2026';
 
 const TERMOS = {
   ci_pag: {
     titulo: 'Fechamento quinzenal e prazo de pagamento',
-    texto: 'Declaro ciência de que o faturamento é fechado a cada quinzena e o pagamento ocorre no mês seguinte ao fechamento, com defasagem de uma quinzena: a quinzena de 01 a 15 é paga no dia 05 do mês seguinte e a quinzena de 16 ao último dia do mês é paga no dia 20 do mês seguinte. Entendo que, enquanto a parceria estiver ativa, sempre haverá uma quinzena em carência aguardando a data de pagamento, e que esse saldo é quitado no calendário previsto em caso de encerramento. Entendo também que os pagamentos são feitos via PIX na chave informada neste cadastro, que parceiros MEI devem emitir nota fiscal (NFS-e) e que descontos por extravio, avaria ou falta de comprovação são aplicados no repasse da quinzena correspondente.'
+    texto: 'Declaro ciência de que o faturamento é fechado a cada quinzena e o pagamento ocorre no mês seguinte ao fechamento, com defasagem de uma quinzena: a quinzena de 01 a 15 é paga no dia 05 do mês seguinte e a quinzena de 16 ao último dia do mês é paga no dia 20 do mês seguinte. Entendo que, enquanto a parceria estiver ativa, sempre haverá uma quinzena em carência aguardando a data de pagamento, e que esse saldo é quitado no calendário previsto em caso de encerramento. Os pagamentos são realizados exclusivamente em conta de pagamento vinculada ao CNPJ no aplicativo Oxpay. Os parceiros devem emitir a Nota Fiscal de Serviços Eletrônica (NFS-e), conforme orientação da equipe financeira. Descontos por extravio, avaria ou ausência de comprovação serão aplicados sempre no pagamento.'
   },
   ci_baixa: {
     titulo: 'Baixa de entrega e comprovação',
