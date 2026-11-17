@@ -237,7 +237,7 @@
         <div class="section-title">
           <div>
             <h2>Fechamentos de pagamento</h2>
-            <p>Cada motorista é montado a partir dos relatórios importados. Entregas por dia (J&amp;T e iMile), valor a receber com a tarifa correta, descontos de extravios e vales — todos editáveis quando precisar ajustar.</p>
+            <p>Cada motorista é montado a partir dos relatórios importados. Entregas por dia (J&amp;T, iMile e ANJUN), valor a receber com a tarifa correta, descontos de extravios e vales — todos editáveis quando precisar ajustar.</p>
           </div>
           <div class="chips">
             <button class="btn ghost sm" id="btnRecalc">↻ Recalcular</button>
@@ -287,7 +287,7 @@
         <div class="section-title">
           <div>
             <h2>Importar relatórios</h2>
-            <p>Importe os relatórios da J&amp;T e da iMile (entregas). Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. A ferramenta identifica automaticamente a <b>unidade</b> (Mauá/Ribeirão), a <b>quinzena</b> e os pedidos, sem tela de confirmação.</p>
+            <p>Importe os relatórios da J&amp;T, da iMile e da ANJUN (entregas). Aceita <b>CSV, XLSX/XLS</b> ou colar do Excel. A ferramenta identifica automaticamente a <b>unidade</b> (Mauá/Ribeirão), a <b>quinzena</b> e os pedidos, sem tela de confirmação.</p>
           </div>
         </div>
         <div id="ultImportBox" style="display:none"></div>
@@ -341,7 +341,7 @@
         <div class="section-title">
           <div>
             <h2>Cadastro de motoristas</h2>
-            <p>Quando um relatório é importado, o motorista é identificado pelo nome e já traz telefone e tarifa daqui. Marque <b>OXpay</b> para confirmar quem recebe por esse meio e preencha o <b>CNPJ</b> — os dois são usados na exportação da lista de pagamento. Cadastre <b>apelidos/variações</b> de nome para casar grafias diferentes nos relatórios. A coluna <b>Origem</b> mostra a região onde o motorista mais entrega — toque em <b>usar</b> para defini-la como cidade padrão.</p>
+            <p>Quando um relatório é importado, o motorista é identificado pelo nome e já traz telefone e tarifa daqui. Marque <b>OXpay</b> para confirmar quem recebe por esse meio e preencha o <b>CNPJ</b> — os dois são usados na exportação da lista de pagamento. Na ANJUN, o sufixo de operação (ex.: D239) é removido e nomes sem espaços são comparados ao cadastro. Use <b>Padronizar</b> para revisar abreviações e erros de digitação. Cadastre <b>apelidos/variações</b> de nome para casar grafias diferentes nos relatórios. A coluna <b>Origem</b> mostra a região onde o motorista mais entrega — toque em <b>usar</b> para defini-la como cidade padrão.</p>
           </div>
           <div class="chips">
             <button class="btn ghost sm" id="btnConsolidar">🧹 Padronizar</button>
@@ -413,6 +413,7 @@
                 <label class="lbl">Multa por extravio — iMile (R$)</label>
                 <input class="fld" id="rMultaImile" placeholder="100,00" inputmode="decimal" />
               </div>
+              <div><label class="lbl">Multa por extravio — ANJUN (R$)</label><input class="fld" id="rMultaAnjun" placeholder="0,00" inputmode="decimal" /><p class="panel-note">Informe a multa acordada com a ANJUN. O relatório de entregas não define essa multa.</p></div>
               <label style="display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer">
                 <input type="checkbox" id="rDescAuto" style="width:18px;height:18px" />
                 Descontar extravios automaticamente do motorista
@@ -537,7 +538,7 @@ const OXPAY_TEMPLATE_B64 = "UEsDBAoAAAAAALSh4VyR28AJ8AQAAPAEAAATAAAAW0NvbnRlbnRf
 const OXPAY_CNPJS = {"SUELEN PAES LANDIM": "60.867.796/0001-06", "RICARDO LIMEIRA DA SILVA JUNIOR": "55.649.350/0001-75", "GUSTAVO NUNES PACHECO": "61.912.807/0001-95", "DAYANE ROSA LIMA DE SOUZA": "67.076.433/0001-00", "EDSON DE SOUZA PONTES": "67.542.150/0001-06", "LEANDRO LOPES": "67.550.288/0001-49", "NATHAN CAUE GARCIA DE OLIVEIRA": "57.075.850/0001-76", "WEMERSON DOS SANTOS SILVA": "51.505.042/0001-15", "VICTOR MIGUEL MARQUES DE SOUZA": "66.538.309/0001-48", "KELVIN FAUSTINO SANTOS": "66.568.310/0001-15", "GUILHERME RODRIGO FREITAS ROCHA": "59.638.745/0001-23", "FELIPE HENRIQUE RODRIGUES CARDOSO": "42.109.232/0001-22", "GUILHERME KINTI DE OLIVEIRA": "50.963.029/0001-47", "CAMILA SARA SANTOS": "67.099.690/0001-59", "GRACIELA GOMES DOS SANTOS SOUZA": "57.219.931/0001-00", "PEDRO HENRIQUE BIZ": "66.872.269/0001-76", "TATIANA DE LIMA GANDRA": "66.472.607/0001-82", "CRISTIANE FREITAS MARIANO SALVADOR": "66.742.282/0001-00", "GUSTAVO KAIQUE PIRES DA SILVA": "66.858.653/0001-14", "PAULO ROBERTO RASOPPI JUNIOR": "63.251.062/0001-96", "JONAS MENDONCA NOVAES": "66.824.940/0001-03", "ROBSON FERREIRA DOS SANTOS": "37.047.132/0001-89", "TAMIRES BISPO DA SILVA SOUZA": "56.190.894/0001-84", "CARLOS HENRIQUE APARECIDO CAVALHEIRO PE": "65.729.043/0001-58", "SANDRO HENRIQUE DE GOES ALENCAR": "66.741.952/0001-74", "LUCAS COSTA DOS SANTOS ANJOS": "63.282.884/0001-34", "BENILTO BARBISA DA SILVA": "61.822.504/0001-81", "GILMAR BENICIO DA SILVA": "56.951.164/0001-59", "VLADIMIR RODRIGUES BORBA": "66.541.713/0001-70", "RAFAEL ROMAO DA SILVA": "60.305.351/0001-32", "ARTHUR FELICIO MOREIRA CANO": "66.204.617/0001-37", "NAIARA DE LIMA SILVA": "66.552.396/0001-98", "JOSE MARIO SAVERO AVORA": "66.513.971/0001-43", "DANIEL FERREIRA DE ARAUJO": "60.614.423/0001-23", "LEANDRO LIMA MENDES": "45.414.439/0001-07", "TAYLA BACIL MIMAR VECCHI ABRAO": "55.349.792/0001-04", "EDUARDO TRENTIN COSMO": "66.334.894/0001-64", "FABIO CRUZ PEREIRA DA COSTA": "48.045.708/0001-95", "KAROLINE OLIVEIRA DA SILVA": "66.275.195/0001-90", "ISRAEL LEAL CONCEICAO": "63.083.115/0001-07", "JOAO VITOR AUGUSTO DE SOUSA": "66.437.871/0001-85", "LEANDRO DO ESPIRITO SANTO DE OLIVEIRA": "66.266.873/0001-59", "SAMUEL ANTUNES DA SILVA FILHO": "50.124.368/0001-30", "VAGNER GONCALVES DA SILVA": "65.783.571/0001-95", "RYAN JAMES PACHECO DA SILVA": "59.177.123/0001-45", "ANDREW RIBAMAR RIBEIRO": "28.903.280/0001-67", "LUCIANO CRUZ XAVIER": "36.720.855/0001-34", "DOUGLAS APARECIDO VIEIRA": "66.018.225/0001-83", "JESSICA DE OLIVEIRA": "49.385.410/0001-97", "FABRICIO NEVES DA CRUZ": "66.261.126/0001-28", "FELIPE TAVARES SILVA": "34.955.555/0001-09", "WELLINGTON FERREIRA SANTOS": "66.117.579/0001-85", "GABRIEL HENRIQUE DE FREITAS SANTOS": "66.256.708/0001-16", "ROMERO BRAGA RODRIGUES": "66.185.978/0001-83", "NYCOLAS XAVIER DA CONCEICAO": "66.152.861/0001-01", "EMERSON HILTON DA SILVA": "62.698.066/0001-54", "THIAGO COSTA NUNES BATISTA": "65.909.559/0001-84", "JOSE LAIRTON MARQUES": "65.688.775/0001-47", "NATALIA DE OLIVEIRA GOMES": "55.689.661/0001-68", "THAIS MARTINS DA CONCEICAO RONDINI": "66.354.620/0001-37", "SAMUEL TAVARES SILVA": "46.781.515/0001-77", "VIRGILIO EVANGELISTA NETO": "66.340.284/0001-73", "KARINA SANTOS SALES": "47.198.143/0001-13", "HEMERSON MOURA": "45.344.197/0001-14", "VINICIOS SANTOS DE MELO": "36.107.254/0001-50", "LEANDRO MEDEIROS PEREIRA": "61.115.033/0001-71", "BRUNA DOS SANTOS NASCIMENTO DA SILVA": "42.945.583/0001-73", "THOMAS TORRES LEITE": "28.820.941/0001-90", "VAGNER MARTINS PIZZICO": "65.135.731/0001-90", "CARLOS FERNANDO DA SILVA PEREIRA": "45.256.588/0001-87", "WILIAN CARVALHO": "57.138.754/0001-20", "TATIANE SANTOS DE LIMA": "32.696.756/0001-03", "CARLOS ALBERTO RONCHI": "65.322.107/0001-00", "DENISE AMBROSIA DOS SANTOS": "15.260.547/0001-01", "ANDERSON ARAUJO DE CARVALHO": "32.965.772/0001-54", "MACKELDEN DE SOUSA LEAL": "55.666.032/0001-12", "GABRIEL VITOR LACERDA": "45.238.634/0001-15"};
 
 const DEFAULT_STATE = {
-  config:{ tarifaBase:2.50, prioridade:'motorista', multaJT:20, multaImile:100, descAuto:true,
+  config:{ tarifaBase:2.50, prioridade:'motorista', multaJT:20, multaImile:100, multaAnjun:0, descAuto:true,
            // Adicional de domingo/feriado: SOMADO à tarifa normal (não substitui).
            // Ex.: adicional 0,50 + tarifa 2,50 = 3,00. Só vale se o motorista CARREGOU
            // E ENTREGOU no mesmo dia (quando exigeMesmoDia=true e há data de carregamento).
@@ -859,13 +860,13 @@ function norm(s){
     .toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
 }
 function normName(s){
-  let n = norm(s);
+  let n = norm(limpaNomeAnjun(s));
   // remove prefixo de letra solta usado nos relatórios (ex.: "F CARLOS ...")
   n = n.replace(/^[A-Z]\s+/,'');
   return n;
 }
 // nome para EXIBIÇÃO: sem prefixo "F " e em MAIÚSCULAS (padrão visual do app)
-function nomeFmt(s){ return (s||'').toString().replace(/^[A-Za-z]\s+/,'').trim().toUpperCase(); }
+function nomeFmt(s){ return limpaNomeAnjun(s).replace(/^[A-Za-z]\s+/,'').trim().toUpperCase(); }
 /* ---------- região de atuação (a partir da cidade da entrega) ----------
    Classifica a cidade do relatório em uma das 3 regiões operadas pela Pllugo.
    Robusto a acentos e variações de grafia (ex.: "Maua", "RIBEIRAO PIRES",
@@ -1039,9 +1040,18 @@ function waNumber(p){
   if(d.length===10||d.length===11) return '55'+d;
   return d;
 }
+// D239 é código de operação compartilhado, nunca uma chave de pessoa.
+function limpaNomeAnjun(s){
+  return (s||'').toString().replace(/[\s_-]*D\d{2,}\s*$/i,'').replace(/([a-zà-ÿ])([A-ZÀ-Ý])/g,'$1 $2').trim();
+}
 function findDriver(nome){
-  const n = normName(nome);
-  return S.drivers.find(d=> normName(d.nome)===n || (d.aliases||[]).some(a=> normName(a)===n));
+  const n=normName(nome), compact=n.replace(/ /g,'');
+  if(!compact) return;
+  const exact=S.drivers.filter(d=>[d.nome,...(d.aliases||[])].some(a=>normName(a)===n));
+  if(exact.length===1) return exact[0];
+  if(exact.length>1) return;
+  const matches=S.drivers.filter(d=>[d.nome,...(d.aliases||[])].some(a=>normName(a).replace(/ /g,'')===compact));
+  return matches.length===1?matches[0]:undefined;
 }
 
 /* =========================================================================
@@ -1174,7 +1184,7 @@ function computeFechamentos(){
         cnpj: d? (d.cnpj||'') : '',
         oxpay: d? !!d.oxpay : false,
         cadastrado: !!d,
-        jt:0, imile:0, dias:{},
+        jt:0, imile:0, anjun:0, dias:{},
         regioes:{}, origem:'', origemPct:0,
         valorBrutoCalc:0,
         bonusEspecial:0,
@@ -1205,8 +1215,8 @@ function computeFechamentos(){
     if(!periodoMatch(e.periodo||'', S.periodoSel)) return;   // filtra pela quinzena/mês selecionado
     const o = getDriver(e.motorista);
     const qtd = parseNum(e.qtd)||0;
-    const emp = /imile/i.test(e.empresa)?'iMile':'J&T';
-    if(emp==='iMile') o.imile+=qtd; else o.jt+=qtd;
+    const emp = e.empresa==='ANJUN'?'ANJUN':(/imile/i.test(e.empresa)?'iMile':'J&T');
+    if(emp==='ANJUN') o.anjun+=qtd; else if(emp==='iMile') o.imile+=qtd; else o.jt+=qtd;
     const tEsp = tarifaEntrega(e, o);   // {tarifa, especial, bloqueada, adicional}
     const adPer = tEsp.especial ? (tEsp.adicional||0) : 0;   // adicional por entrega (só quando aplicável)
     const basePer = tEsp.tarifa - adPer;                     // tarifa normal (sem o adicional)
@@ -1217,9 +1227,9 @@ function computeFechamentos(){
     if(tEsp.especial){ o.especialQtd += qtd; o.especialValor += valBonus; }
     if(tEsp.bloqueada){ o.especialBloqueadas += qtd; }
     const dia = e.data || 'sem data';
-    if(!o.dias[dia]) o.dias[dia]={jt:0,imile:0,valor:0,bonus:0,cidade:e.cidade||'',tarifa:basePer,tarifaOrigem:tEsp.origem||'base',tarifaMista:false,especial:false,bloqueada:false};
+    if(!o.dias[dia]) o.dias[dia]={jt:0,imile:0,anjun:0,valor:0,bonus:0,cidade:e.cidade||'',tarifa:basePer,tarifaOrigem:tEsp.origem||'base',tarifaMista:false,especial:false,bloqueada:false};
     else if(Math.abs((o.dias[dia].tarifa||0)-basePer)>0.001) o.dias[dia].tarifaMista=true;
-    if(emp==='iMile') o.dias[dia].imile+=qtd; else o.dias[dia].jt+=qtd;
+    if(emp==='ANJUN') o.dias[dia].anjun+=qtd; else if(emp==='iMile') o.dias[dia].imile+=qtd; else o.dias[dia].jt+=qtd;
     o.dias[dia].valor += valBase;
     o.dias[dia].bonus += valBonus;
     if(tEsp.especial) o.dias[dia].especial=true;
@@ -1233,8 +1243,8 @@ function computeFechamentos(){
     // visão "Todos os períodos", para não sumirem nem serem descontados duas vezes.
     if(S.periodoSel && !periodoMatch(x.periodo||'', S.periodoSel)) return;
     const o = getDriver(x.motorista);
-    const emp = /imile/i.test(x.empresa)?'iMile':'J&T';
-    const multa = emp==='iMile'? parseNum(S.config.multaImile) : parseNum(S.config.multaJT);
+    const emp = x.empresa==='ANJUN'?'ANJUN':(/imile/i.test(x.empresa)?'iMile':'J&T');
+    const multa = emp==='ANJUN'?parseNum(S.config.multaAnjun)||0:emp==='iMile'? parseNum(S.config.multaImile) : parseNum(S.config.multaJT);
     const val = (x.valor!=null && x.valor!=='') ? parseNum(x.valor) : multa;
     o.extravios.push({pedido:x.pedido||'—', empresa:emp, valor:val, data:x.data||''});
     o.extravioValorCalc += val;
@@ -1297,12 +1307,13 @@ function renderFech(){
   const totMot = data.length;
   const totJT = data.reduce((s,d)=>s+d.jt,0);
   const totIM = data.reduce((s,d)=>s+d.imile,0);
-  const totEnt = totJT + totIM;
+  const totAN = data.reduce((s,d)=>s+(d.anjun||0),0);
+  const totEnt = totJT + totIM + totAN;
   const totPag = data.reduce((s,d)=>s+d.liquido,0);
   const totExt = data.reduce((s,d)=>s+d.extravioValorCalc,0);
   $('#fechKpis').innerHTML = [
     kpi('Motoristas','👥',totMot, (data.filter(d=>!d.cadastrado).length)+' sem cadastro', 'var(--brand)','var(--brand-soft)'),
-    kpi('Entregas','📦',totEnt.toLocaleString('pt-BR'),`J&amp;T ${totJT.toLocaleString('pt-BR')} · iMile ${totIM.toLocaleString('pt-BR')}`,'var(--blue)','var(--blue-soft)'),
+    kpi('Entregas','📦',totEnt.toLocaleString('pt-BR'),`J&amp;T ${totJT.toLocaleString('pt-BR')} · iMile ${totIM.toLocaleString('pt-BR')} · ANJUN ${totAN.toLocaleString('pt-BR')}`,'var(--blue)','var(--blue-soft)'),
     kpi('Total a pagar','💸',fmtBRL(totPag),'líquido após descontos','var(--green)','var(--green-soft)','sm'),
     kpi('Extravios','⚠️',fmtBRL(totExt), data.reduce((s,d)=>s+d.extravios.length,0)+' pedidos','var(--red)','var(--red-soft)','sm')
   ].join('');
@@ -1311,7 +1322,7 @@ function renderFech(){
   const regBox = $('#fechRegioes');
   if(data.length){
     const agg = {};
-    data.forEach(d=>{ if(d.origem){ (agg[d.origem]=agg[d.origem]||{mot:0,ent:0}); agg[d.origem].mot++; agg[d.origem].ent += d.jt+d.imile; } });
+    data.forEach(d=>{ if(d.origem){ (agg[d.origem]=agg[d.origem]||{mot:0,ent:0}); agg[d.origem].mot++; agg[d.origem].ent += d.jt+d.imile+(d.anjun||0); } });
     const ordered = REGIOES.concat('Outros').filter(r=>agg[r]);
     if(ordered.length){
       const chips = ordered.map(r=>{
@@ -1331,7 +1342,7 @@ function renderFech(){
   } else regBox.innerHTML='';
   const host = $('#fechList');
   if(!data.length){
-    host.innerHTML = emptyBox('📥','Nenhum dado importado ainda','Vá em <b>Importar</b> e suba os relatórios da J&T e da iMile.');
+    host.innerHTML = emptyBox('📥','Nenhum dado importado ainda','Vá em <b>Importar</b> e suba os relatórios da J&T, da iMile e da ANJUN.');
     return;
   }
   if(!view.length){ host.innerHTML = emptyBox('🔎','Nada encontrado',S.filtroOrigem?'Nenhum motorista na origem <b>'+esc(S.filtroOrigem)+'</b> com esse termo.':'Tente outro termo de busca.'); return; }
@@ -1364,13 +1375,15 @@ function origemBadge(d){
 /* lista de extravios identificando empresa (J&T x iMile) */
 function extraviosHTML(d){
   if(!d.extravios.length) return '';
-  const jt = d.extravios.filter(x=>x.empresa!=='iMile');
+  const jt = d.extravios.filter(x=>x.empresa==='J&T');
   const im = d.extravios.filter(x=>x.empresa==='iMile');
   const totJT = jt.reduce((s,x)=>s+x.valor,0), totIM = im.reduce((s,x)=>s+x.valor,0);
   const chip = (x,cls)=>`<span class="ext-chip ${cls}"><span class="ext-tag">${cls==='jt'?'J&amp;T':'iMile'}</span><span>${esc(x.pedido)}</span><span class="ext-val">${fmtBRL(x.valor)}</span></span>`;
   let html = `<div class="extravio-list"><div class="et-head">Pedidos extraviados (${d.extravios.length}) — desconto ${fmtBRL(d.extravioValorCalc)}</div>`;
   if(jt.length) html += `<div class="ext-group"><div class="ext-title" style="color:var(--blue)">🔵 J&amp;T · ${jt.length} pedido(s) · ${fmtBRL(totJT)}</div><div>${jt.map(x=>chip(x,'jt')).join('')}</div></div>`;
   if(im.length) html += `<div class="ext-group"><div class="ext-title" style="color:var(--yellow)">🟡 iMile · ${im.length} pedido(s) · ${fmtBRL(totIM)}</div><div>${im.map(x=>chip(x,'im')).join('')}</div></div>`;
+  const an=d.extravios.filter(x=>x.empresa==='ANJUN');
+  if(an.length) html+=`<div class="ext-group"><div class="ext-title">ANJUN · ${an.length} pedido(s) · ${fmtBRL(an.reduce((v,x)=>v+x.valor,0))}</div>${an.map(x=>`<span class="ext-chip">${esc(x.pedido)} · ${fmtBRL(x.valor)}</span>`).join('')}</div>`;
   html += `</div>`;
   return html;
 }
@@ -1386,7 +1399,7 @@ function driverCard(d){
     const regraCor = x.tarifaOrigem==='cidade' ? 'green' : (x.tarifaOrigem==='regiao' ? 'yellow' : (x.tarifaOrigem==='motorista' ? 'blue' : 'neutral'));
     const tarCell = x.tarifaMista ? '<span class="badge neutral" style="font-size:10px" title="Mais de uma tarifa neste dia">várias</span>'
       : `${fmtBRL(x.tarifa||0)} <span class="badge ${regraCor}" style="font-size:9px" title="Regra aplicada nesta entrega">${regraLbl}</span>`;
-    return `<tr><td>${esc(dia)}${tag}</td><td>${x.jt||0}</td><td>${x.imile||0}</td><td>${(x.jt||0)+(x.imile||0)}</td><td>${esc(x.cidade||'—')}</td><td>${tarCell}</td><td style="text-align:right">${fmtBRL((x.valor||0)+(x.bonus||0))}</td></tr>`;
+    return `<tr><td>${esc(dia)}${tag}</td><td>${x.jt||0}</td><td>${x.imile||0}</td><td>${x.anjun||0}</td><td>${(x.jt||0)+(x.imile||0)+(x.anjun||0)}</td><td>${esc(x.cidade||'—')}</td><td>${tarCell}</td><td style="text-align:right">${fmtBRL((x.valor||0)+(x.bonus||0))}</td></tr>`;
   }).join('') || `<tr><td colspan="7" style="color:var(--text-faint)">Sem detalhamento por dia</td></tr>`;
 
   const neg = d.liquido < 0;
@@ -1399,8 +1412,8 @@ function driverCard(d){
       </div>
       <div class="chips">
         <span class="badge blue">J&T: ${d.jt}</span>
-        <span class="badge neutral">iMile: ${d.imile}</span>
-        <span class="badge green">${d.jt+d.imile} entregas</span>
+        <span class="badge neutral">iMile: ${d.imile}</span><span class="badge neutral">ANJUN: ${d.anjun||0}</span>
+        <span class="badge green">${d.jt+d.imile+(d.anjun||0)} entregas</span>
         ${d.especialQtd?`<span class="badge especial" title="Entregas com adicional de domingo/feriado (carregadas e entregues no mesmo dia)">★ ${d.especialQtd} c/ adicional · ${fmtBRL(d.especialValor)}</span>`:''}
         ${origemBadge(d)}
         ${d.extravios.length?`<span class="badge red">⚠️ ${d.extravios.length} extravio(s)</span>`:''}
@@ -1409,7 +1422,7 @@ function driverCard(d){
     ${d.origem? `<div style="font-size:12px;color:var(--text-faint);margin:-4px 0 10px">Atuação por entregas: ${regiaoBreakdown(d.regioes)}</div>`:''}
 
     <div class="pay-grid">
-      <div class="pay-cell calc-cell"><label>Valor bruto (entregas)</label><div class="val" title="${d.jt+d.imile} entregas — calculado automaticamente">${fmtBRL(d.bruto)}</div></div>
+      <div class="pay-cell calc-cell"><label>Valor bruto (entregas)</label><div class="val" title="${d.jt+d.imile+(d.anjun||0)} entregas — calculado automaticamente">${fmtBRL(d.bruto)}</div></div>
       ${d.bonus?`<div class="pay-cell bonus-cell"><label>Bônus (+)</label><div class="val">+${fmtBRL(d.bonus)}</div></div>`:''}
       <div class="pay-cell"><label>Adicional de rota (+)</label><input data-f="adicional" inputmode="decimal" value="${d.adicional.toFixed(2).replace('.',',')}"></div>
       ${S.config.descAuto
@@ -1425,7 +1438,7 @@ function driverCard(d){
     <details class="daybox">
       <summary><span>📅 Entregas por dia</span><span class="badge neutral">${Object.keys(d.dias).length} dia(s)</span></summary>
       <div class="table-wrap" style="border:none;border-radius:0;max-height:280px">
-        <table><thead><tr><th>Data</th><th>J&T</th><th>iMile</th><th>Total</th><th>Cidade</th><th>Tarifa</th><th style="text-align:right">Valor</th></tr></thead>
+        <table><thead><tr><th>Data</th><th>J&T</th><th>iMile</th><th style="padding:8px;border-bottom:1px solid #E8E8EC">ANJUN</th><th>ANJUN</th><th>Total</th><th>Cidade</th><th>Tarifa</th><th style="text-align:right">Valor</th></tr></thead>
         <tbody>${dayRows}</tbody></table>
       </div>
     </details>
@@ -1506,13 +1519,14 @@ function resumoTexto(d){
   L.push(`*Entregas*`);
   L.push(`• J&T: ${d.jt}`);
   L.push(`• iMile: ${d.imile}`);
-  L.push(`• Total: ${d.jt+d.imile} entregas`);
+  L.push(`• ANJUN: ${d.anjun||0}`);
+  L.push(`• Total: ${d.jt+d.imile+(d.anjun||0)} entregas`);
   // entregas por dia (mesma informação do painel)
   const dias=Object.keys(d.dias).sort((a,b)=>dateKey(a).localeCompare(dateKey(b)));
   if(dias.length){
     L.push('');
     L.push(`*Entregas por dia*`);
-    dias.forEach(dia=>{ const x=d.dias[dia]; L.push(`• ${dia}: ${(x.jt||0)+(x.imile||0)}`); });
+    dias.forEach(dia=>{ const x=d.dias[dia]; L.push(`• ${dia}: ${(x.jt||0)+(x.imile||0)+(x.anjun||0)}`); });
   }
   L.push('');
   L.push(`*Valores*`);
@@ -1525,10 +1539,12 @@ function resumoTexto(d){
   L.push('');
   L.push(`*A RECEBER: ${fmtBRL(d.liquido)}*`);
   if(d.extravios.length){
-    const jt=d.extravios.filter(x=>x.empresa!=='iMile'), im=d.extravios.filter(x=>x.empresa==='iMile');
+    const jt=d.extravios.filter(x=>x.empresa==='J&T'), im=d.extravios.filter(x=>x.empresa==='iMile');
     L.push('');
     L.push(`*Pedidos extraviados (${d.extravios.length})*`);
     if(jt.length) L.push(`J&T (${jt.length}): ${jt.map(x=>x.pedido).join(', ')}`);
+    const an=d.extravios.filter(x=>x.empresa==='ANJUN');
+    if(an.length) L.push(`ANJUN (${an.length}): ${an.map(x=>x.pedido).join(', ')}`);
     if(im.length) L.push(`iMile (${im.length}): ${im.map(x=>x.pedido).join(', ')}`);
   }
   L.push('');
@@ -1563,7 +1579,7 @@ function editPhone(d){
 function salvarFechamento(d){
   const rec={
     id:uid(), ref:S.ref||'', periodo:S.periodoSel||'', origem:d.origem||'', criadoEm:new Date().toISOString(),
-    nome:d.nome, telefone:d.telefone, jt:d.jt, imile:d.imile,
+    nome:d.nome, telefone:d.telefone, jt:d.jt, imile:d.imile, anjun:d.anjun||0,
     especialQtd:d.especialQtd||0, especialValor:d.especialValor||0,
     bruto:d.bruto, bonus:d.bonus||0, adicional:d.adicional, extravio:d.extravio, vales:d.vales, outros:d.outros, liquido:d.liquido,
     extravios:d.extravios.slice(), dias:JSON.parse(JSON.stringify(d.dias))
@@ -1586,9 +1602,9 @@ function faturaInner(d, rec){
   const periodoKey = (rec&&rec.periodo)||S.periodoSel||'';
   const rows = Object.keys(dias).sort((a,b)=>dateKey(a).localeCompare(dateKey(b))).map(dia=>{const x=dias[dia];
     const tag = x.especial?' <span style="background:#F5F3FF;color:#7C3AED;font-size:9px;font-weight:800;padding:1px 5px;border-radius:5px;text-transform:uppercase">especial</span>':'';
-    return `<tr><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3">${esc(dia)}${tag}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:center">${x.jt||0}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:center">${x.imile||0}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:center">${(x.jt||0)+(x.imile||0)}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3">${esc(x.cidade||'—')}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:right;font-weight:600">${fmtBRL((x.valor||0)+(x.bonus||0))}</td></tr>`;}).join('');
+    return `<tr><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3">${esc(dia)}${tag}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:center">${x.jt||0}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:center">${x.imile||0}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:center">${x.anjun||0}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:center">${(x.jt||0)+(x.imile||0)+(x.anjun||0)}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3">${esc(x.cidade||'—')}</td><td style="padding:7px 8px;border-bottom:1px solid #EEF0F3;text-align:right;font-weight:600">${fmtBRL((x.valor||0)+(x.bonus||0))}</td></tr>`;}).join('');
   const extr=(rec&&rec.extravios)||d.extravios||[];
-  const extJT=extr.filter(x=>x.empresa!=='iMile'), extIM=extr.filter(x=>x.empresa==='iMile');
+  const extJT=extr.filter(x=>x.empresa==='J&T'), extIM=extr.filter(x=>x.empresa==='iMile');
   const totExtJT=extJT.reduce((s,x)=>s+(x.valor||0),0), totExtIM=extIM.reduce((s,x)=>s+(x.valor||0),0);
   const neg = d.liquido<0;
   const especialQtd = d.especialQtd||0, especialValor=d.especialValor||0;
@@ -1623,7 +1639,8 @@ function faturaInner(d, rec){
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:12px;padding:8px 14px;text-align:center"><div style="font-size:10px;font-weight:800;color:#2563EB;text-transform:uppercase;letter-spacing:.05em">J&T</div><div style="font-size:20px;font-weight:800;color:#2563EB">${d.jt}</div></div>
         <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px;padding:8px 14px;text-align:center"><div style="font-size:10px;font-weight:800;color:#D97706;text-transform:uppercase;letter-spacing:.05em">iMile</div><div style="font-size:20px;font-weight:800;color:#D97706">${d.imile}</div></div>
-        <div style="background:#EDF9F1;border:1px solid #BBF7D0;border-radius:12px;padding:8px 14px;text-align:center"><div style="font-size:10px;font-weight:800;color:#16A34A;text-transform:uppercase;letter-spacing:.05em">Total</div><div style="font-size:20px;font-weight:800;color:#16A34A">${d.jt+d.imile}</div></div>
+        <div style="padding:8px 14px;text-align:center"><div>ANJUN</div><div style="font-size:20px;font-weight:800">${d.anjun||0}</div></div>
+        <div style="background:#EDF9F1;border:1px solid #BBF7D0;border-radius:12px;padding:8px 14px;text-align:center"><div style="font-size:10px;font-weight:800;color:#16A34A;text-transform:uppercase;letter-spacing:.05em">Total</div><div style="font-size:20px;font-weight:800;color:#16A34A">${d.jt+d.imile+(d.anjun||0)}</div></div>
       </div>
     </div>
 
@@ -1635,16 +1652,17 @@ function faturaInner(d, rec){
         <thead><tr style="background:#FAFAFA">
           <th style="text-align:left;padding:8px;border-bottom:1px solid #E8E8EC;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#6B7280">Data</th>
           <th style="padding:8px;border-bottom:1px solid #E8E8EC;font-size:10px;text-transform:uppercase;color:#6B7280">J&T</th>
-          <th style="padding:8px;border-bottom:1px solid #E8E8EC;font-size:10px;text-transform:uppercase;color:#6B7280">iMile</th>
+          <th style="padding:8px;border-bottom:1px solid #E8E8EC;font-size:10px;text-transform:uppercase;color:#6B7280">iMile</th><th style="padding:8px;border-bottom:1px solid #E8E8EC">ANJUN</th>
           <th style="padding:8px;border-bottom:1px solid #E8E8EC;font-size:10px;text-transform:uppercase;color:#6B7280">Total</th>
           <th style="text-align:left;padding:8px;border-bottom:1px solid #E8E8EC;font-size:10px;text-transform:uppercase;color:#6B7280">Cidade</th>
           <th style="text-align:right;padding:8px;border-bottom:1px solid #E8E8EC;font-size:10px;text-transform:uppercase;color:#6B7280">Valor</th>
         </tr></thead>
-        <tbody>${rows||'<tr><td colspan=6 style="padding:10px;color:#98A1AE">Sem detalhamento por dia</td></tr>'}</tbody>
+        <tbody>${rows||'<tr><td colspan=7 style="padding:10px;color:#98A1AE">Sem detalhamento por dia</td></tr>'}</tbody>
       </table>
     </div>
 
     ${extBloco}
+    ${extr.filter(x=>x.empresa==='ANJUN').map(x=>`<div style="font-size:12px">ANJUN · ${esc(x.pedido)} · ${fmtBRL(x.valor)}</div>`).join('')}
 
     <div style="margin-top:18px;display:flex;justify-content:flex-end">
       <table style="width:100%;max-width:360px;font-size:14px;border-collapse:collapse">
@@ -1700,7 +1718,8 @@ function gerarFatura(d){ downloadFatura(d); }
    ========================================================================= */
 const IMPORTS = {
   jt:    {titulo:'Relatório J&T', icon:'🟡', empresa:'J&T', tipo:'entregas'},
-  imile: {titulo:'Relatório iMile', icon:'🔵', empresa:'iMile', tipo:'entregas'}
+  imile: {titulo:'Relatório iMile', icon:'🔵', empresa:'iMile', tipo:'entregas'},
+  anjun: {titulo:'Relatório ANJUN', icon:'🟣', empresa:'ANJUN', tipo:'entregas'}
 };
 const IMPORT_UNITS = [
   {key:'maua', label:'Mauá'},
@@ -1863,6 +1882,7 @@ function detectImportUnit(headers, body, sourceName, preHeaderRows){
 }
 function processRowsAutomatically(k, rows, sourceName){
   const cfg=IMPORTS[k];
+  if(k==='anjun') return processAnjunRows(rows,sourceName);
   const hi=pickHeaderRow(rows);
   const headers=(rows[hi]||[]).map((h,i)=>(''+h).trim()||('Coluna '+(i+1)));
   const body=rows.slice(hi+1).filter(r=>r.some(v=>(''+(v==null?'':v)).trim()!==''));
@@ -1899,11 +1919,35 @@ function processRowsAutomatically(k, rows, sourceName){
   }
   doImport(k,cfg,sel,body);
 }
+function processAnjunRows(rows,sourceName){
+  const hi=rows.findIndex(r=>r.some(h=>norm(h)==='OPERADOR DE DESPACHO'));
+  if(hi<0){ toast('ANJUN: coluna operador de despacho não encontrada','err'); return; }
+  const h=rows[hi].map(norm);
+  const col=(test)=>h.findIndex(test);
+  const sel={motorista:col(x=>x==='OPERADOR DE DESPACHO'),
+    pedido:col(x=>x==='NUMERO DO NEGOCIO'), cidade:col(x=>x==='CIDADE DESTINATARIA'),
+    data:col(x=>x.startsWith('FRETE DE ENTREGA LASTMILE') && x.includes('O TEMPO DE SERVICO')),
+    qtd:-1,carregamento:-1};
+  const status=col(x=>x==='STATUS DO PEDIDO');
+  if([sel.motorista,sel.pedido,sel.cidade,sel.data,status].some(x=>x<0)){
+    toast('ANJUN: faltam colunas obrigatórias de pedido, motorista, cidade, status ou data Lastmile','err'); return;
+  }
+  const body=rows.slice(hi+1).filter(r=>norm(r[status])==='PEDIDO ENTREGUE');
+  if(!body.length){ toast('ANJUN: nenhum pedido entregue encontrado','err'); return; }
+  if(body.some(r=>!(''+(r[sel.motorista]||'')).trim() || !(''+(r[sel.pedido]||'')).trim() || !dataOk(normDate(r[sel.data])))){
+    toast('ANJUN: há entregas sem motorista, pedido ou data válida. Corrija o relatório.','err'); return;
+  }
+  sel.unidade=detectImportUnit(rows[hi],body,sourceName||'',rows.slice(0,hi));
+  if(!sel.unidade){ toast('ANJUN: não foi possível identificar a unidade pela cidade de destino','err'); return; }
+  sel.periodoFallback=quinzenaFromDate(normDate(body[0][sel.data]));
+  // Preserva o relatório original na assinatura; padroniza somente os nomes usados no fechamento.
+  doImport('anjun',IMPORTS.anjun,sel,body);
+}
 function renderImportCards(){
   const host=$('#importGrid'); host.innerHTML='';
   Object.keys(IMPORTS).forEach(k=>{
     const cfg=IMPORTS[k];
-    const count = cfg.tipo==='entregas'? S.entregas.filter(e=> (cfg.empresa==='iMile')? /imile/i.test(e.empresa): !/imile/i.test(e.empresa)).reduce((s,e)=>s+(parseNum(e.qtd)||0),0)
+    const count = cfg.tipo==='entregas'? S.entregas.filter(e=> e.empresa===cfg.empresa).reduce((s,e)=>s+(parseNum(e.qtd)||0),0)
                 : cfg.tipo==='extravios'? S.extravios.length
                 : S.drivers.length;
     // O total acumulado de pedidos não é exibido: cada cartão mostra somente o
@@ -1954,7 +1998,7 @@ function clearDataset(k){
     <button class="btn primary" id="mClr">Limpar</button></div>`);
   $('#mClr').onclick=()=>{
     if(cfg.tipo==='entregas'){
-      S.entregas=S.entregas.filter(e=> (cfg.empresa==='iMile')? !/imile/i.test(e.empresa): /imile/i.test(e.empresa));
+      S.entregas=S.entregas.filter(e=> e.empresa!==cfg.empresa);
       // Limpar o relatório também remove suas travas de duplicidade e seus cartões
       // de última importação. Assim o mesmo arquivo pode ser reenviado no reteste.
       S.imports=(S.imports||[]).filter(i=>!(i.tipo==='entregas' && i.empresa===cfg.empresa));
@@ -2082,7 +2126,7 @@ function applyExtraviosSheet(headers, body){
   const novos=[]; let total=0, foraPeriodo=0;
   body.forEach(r=>{
     const empN=norm(r[c.emp]);
-    const empresa=/IMILE/.test(empN)?'iMile':(/J\s*T/.test(empN)?'J&T':'');
+    const empresa=/ANJUN/.test(empN)?'ANJUN':/IMILE/.test(empN)?'iMile':(/J\s*T/.test(empN)?'J&T':'');
     if(!empresa) return;                                       // pula TOTAL / linhas em branco
     total++;
     const ent=(''+(r[c.ent]||'')).trim();
@@ -2094,7 +2138,7 @@ function applyExtraviosSheet(headers, body){
     const dataDesc = c.dDesc>-1?normDate(r[c.dDesc]):'';
     if(!dataDesc) return;                                       // só entra com DATA DESCONTO preenchida
     const prod=c.prod>-1?parseNum(r[c.prod]):0;
-    const multa=c.multa>-1?parseNum(r[c.multa]):(empresa==='iMile'?parseNum(cf.multaImile):parseNum(cf.multaJT));
+    const multa=c.multa>-1?parseNum(r[c.multa]):(empresa==='ANJUN'?(parseNum(cf.multaAnjun)||0):empresa==='iMile'?parseNum(cf.multaImile):parseNum(cf.multaJT));
     const exposicao=c.exp>-1?parseNum(r[c.exp]):(prod+multa);
     const valor = cf.extValor==='multa'?multa : cf.extValor==='produto'?prod : exposicao;
     // a quinzena do fechamento vem do calendário de pagamento (DATA DESCONTO = data de pagamento)
@@ -2395,7 +2439,8 @@ function doImport(k,cfg,sel,body){
     const seen = new Set();                         // dedup por pedido principal (volumes -001/-002…)
     const periodosImportados=new Set();
     body.forEach(r=>{
-      const nome=(r[sel.motorista]==null?'':''+r[sel.motorista]).trim(); if(!nome) return;
+      const rawNome=(r[sel.motorista]==null?'':''+r[sel.motorista]).trim();
+      const nome=cfg.empresa==='ANJUN' ? (findDriver(rawNome)?.nome || nomeFmt(rawNome)) : rawNome; if(!nome) return;
       const ped=(r[sel.pedido]==null?'':''+r[sel.pedido]).trim();
       const parent=ped.replace(/-\d{1,3}$/,'').trim();
       if(!parent){ pedidosSemId++; return; }
@@ -2503,6 +2548,11 @@ function levRatio(a,b){
 function nomeSimilar(a,b){           // a,b = chaves normName (sem acento, maiúsculas, sem "F ")
   if(a===b) return 1;
   const ta=a.split(' ').filter(Boolean), tb=b.split(' ').filter(Boolean);
+  const compactA=a.replace(/ /g,''), compactB=b.replace(/ /g,'');
+  if(compactA===compactB) return 1;
+  // Nome concatenado/abreviado: apenas sugere no Padronizar, nunca mescla sozinho.
+  const prefixo=(curto,longo)=>longo.length>=2 && curto.length>=8 && longo.slice(0,2).join('')===curto;
+  if(prefixo(compactA,tb)||prefixo(compactB,ta)) return 0.95;
   const short = ta.length<=tb.length?ta:tb;
   const longSet = new Set(ta.length<=tb.length?tb:ta);
   const longLen = Math.max(ta.length,tb.length);
@@ -2510,7 +2560,7 @@ function nomeSimilar(a,b){           // a,b = chaves normName (sem acento, maiú
     if(short.length>=2) return 0.95;          // ex.: "RYAN JAMES" ⊂ "RYAN JAMES PACHECO DA SILVA"
     if(longLen>=2)      return 0.9;           // ex.: "GILMAR" ⊂ "GILMAR BENICIO DA SILVA"
   }
-  return levRatio(a,b);                        // ex.: "...FEREIRA" vs "...PEREIRA"; "VDANIEL" vs "DANIEL"
+  return Math.max(levRatio(a,b), levRatio(a.replace(/ /g,''),b.replace(/ /g,'')));                        // ex.: "...FEREIRA" vs "...PEREIRA"; "VDANIEL" vs "DANIEL"
 }
 // junta todos os nomes que aparecem (relatórios + cadastro), com frequência
 function coletaNomes(){
@@ -2591,7 +2641,7 @@ function openConsolidar(){
         </label>`).join('')}
     </div>`).join('');
   modal(`<h3>🧹 Padronizar motoristas</h3>
-    <p class="mh">Encontrei <b>${clusters.length}</b> motorista(s) com possíveis variações. Para cada um, confira o <b>nome padrão</b> (editável, em maiúsculas) e <b>marque só os nomes que são realmente a mesma pessoa</b> — desmarque sugestões erradas. Os marcados viram <b>apelidos</b>, então J&T e iMile caem no mesmo motorista.${comPrefixo?` O prefixo "F " será removido de ${comPrefixo} cadastro(s).`:''}</p>
+    <p class="mh">Encontrei <b>${clusters.length}</b> motorista(s) com possíveis variações. Para cada um, confira o <b>nome padrão</b> (editável, em maiúsculas) e <b>marque só os nomes que são realmente a mesma pessoa</b> — desmarque sugestões erradas. Os marcados viram <b>apelidos</b>, então J&T, iMile e ANJUN caem no mesmo motorista.${comPrefixo?` O prefixo "F " será removido de ${comPrefixo} cadastro(s).`:''}</p>
     <div class="table-wrap" style="max-height:58vh;overflow:auto">${linhas}</div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="__pll.closeModal()">Cancelar</button>
@@ -2674,7 +2724,7 @@ function openVincular(id){
   const d=S.drivers.find(x=>x.id===id); if(!d) return;
   if(!d.aliases) d.aliases=[];
   modal(`<h3>🔗 Variações de nome</h3>
-    <p class="mh">Vincule todas as grafias deste motorista (J&T, iMile, extravios). Ao vincular um nome que tem cadastro separado, ele é <b>mesclado e removido</b> — fica só este cadastro.</p>
+    <p class="mh">Vincule todas as grafias deste motorista (J&T, iMile, ANJUN, extravios). Ao vincular um nome que tem cadastro separado, ele é <b>mesclado e removido</b> — fica só este cadastro.</p>
     <label class="lbl">Nome padrão</label>
     <input class="fld sm" id="vincNome" value="${esc(nomeFmt(d.nome))}" style="text-transform:uppercase;font-weight:700;margin-bottom:12px">
     <label class="lbl">Variações vinculadas</label>
@@ -2804,6 +2854,7 @@ function addDriver(){
 function loadRulesForm(){
   $('#rTarifaBase').value=(''+S.config.tarifaBase).replace('.',',');
   $('#rPrioridade').value=S.config.prioridade;
+  $('#rMultaAnjun').value=(''+(S.config.multaAnjun||0)).replace('.',',');
   $('#rMultaJT').value=(''+S.config.multaJT).replace('.',',');
   $('#rMultaImile').value=(''+S.config.multaImile).replace('.',',');
   $('#rDescAuto').checked=!!S.config.descAuto;
@@ -2860,6 +2911,7 @@ function renderCidades(){
 function saveRules(){
   S.config.tarifaBase=parseNum($('#rTarifaBase').value)||0;
   S.config.prioridade=$('#rPrioridade').value;
+  S.config.multaAnjun=parseNum($('#rMultaAnjun').value)||0;
   S.config.multaJT=parseNum($('#rMultaJT').value)||0;
   S.config.multaImile=parseNum($('#rMultaImile').value)||0;
   S.config.descAuto=$('#rDescAuto').checked;
@@ -2887,7 +2939,7 @@ function renderHist(){
         <div><div class="driver-name">${esc(f.nome)}</div>
           <div class="driver-phone">${esc(f.ref||'sem referência')} · ${new Date(f.criadoEm).toLocaleString('pt-BR')}</div></div>
         <div class="chips">
-          <span class="badge blue">J&T ${f.jt}</span><span class="badge neutral">iMile ${f.imile}</span>
+          <span class="badge blue">J&T ${f.jt}</span><span class="badge neutral">iMile ${f.imile}</span><span class="badge neutral">ANJUN ${f.anjun||0}</span>
           <span class="badge green">${fmtBRL(f.liquido)}</span>
         </div>
       </div>
@@ -2907,7 +2959,7 @@ function renderHist(){
   });
 }
 function histToDriver(f){
-  return {nome:f.nome,telefone:f.telefone,jt:f.jt,imile:f.imile,bruto:f.bruto,bonus:f.bonus||0,adicional:f.adicional,
+  return {nome:f.nome,telefone:f.telefone,jt:f.jt,imile:f.imile,anjun:f.anjun||0,bruto:f.bruto,bonus:f.bonus||0,adicional:f.adicional,
     extravio:f.extravio,vales:f.vales,outros:f.outros,liquido:f.liquido,extravios:f.extravios||[],dias:f.dias||{},
     origem:f.origem||'', especialQtd:f.especialQtd||0, especialValor:f.especialValor||0,
     key:normName(f.nome), cadastrado:true};
