@@ -348,6 +348,7 @@
             <button class="btn primary sm" id="btnAddDriver">+ Novo motorista</button>
           </div>
         </div>
+        <div id="driverPendencias"></div>
         <div class="toolbar">
           <input class="fld sm grow" id="searchDriver" placeholder="🔎 Buscar por nome ou telefone..." />
           <select class="fld sm" id="fltCidade" title="Filtrar por cidade padrão"><option value="">Cidade padrão: todas</option></select>
@@ -1345,8 +1346,18 @@ function renderFech(){
     host.innerHTML = emptyBox('📥','Nenhum dado importado ainda','Vá em <b>Importar</b> e suba os relatórios da J&T, da iMile e da ANJUN.');
     return;
   }
-  if(!view.length){ host.innerHTML = emptyBox('🔎','Nada encontrado',S.filtroOrigem?'Nenhum motorista na origem <b>'+esc(S.filtroOrigem)+'</b> com esse termo.':'Tente outro termo de busca.'); return; }
+  if(!view.length){
+    host.innerHTML=emptyBox('🔎','Nenhum motorista com os filtros atuais',`Há ${data.length} motorista(s) neste período. O filtro Oxpay está em <b>${S.filtroOxpay==='com'?'Com Oxpay':S.filtroOxpay==='sem'?'Sem Oxpay':'Todos'}</b>. ${data.filter(d=>!d.cadastrado).length} ainda sem cadastro vinculado.<br><button class="btn secondary sm" id="limparFiltrosFech">Mostrar todos</button> <button class="btn primary sm" id="resolverCadastros">Identificar motoristas</button>`);
+    $('#limparFiltrosFech').onclick=()=>{ S.filtroOxpay=''; S.filtroStatus=''; S.filtroOrigem=''; $('#fltOxpay').value=''; $('#fltStatus').value=''; $('#searchFech').value=''; save(); renderFech(); };
+    $('#resolverCadastros').onclick=()=>showPage('motoristas');
+    return;
+  }
   host.innerHTML = '';
+  const pendentes=data.filter(d=>!d.cadastrado).length;
+  if(pendentes){
+    const aviso=el(`<div class="panel" style="margin-bottom:12px"><b>${pendentes} motorista(s) sem cadastro vinculado.</b> Vincule o nome do relatório para usar telefone, tarifa e Oxpay do cadastro correto. <button class="btn primary sm" data-identificar>Identificar motoristas</button></div>`);
+    $('[data-identificar]',aviso).onclick=()=>showPage('motoristas'); host.appendChild(aviso);
+  }
   view.forEach(d=> host.appendChild(driverCard(d)));
 }
 
@@ -2757,13 +2768,88 @@ function openVincular(id){
       save(); $('#vincBusca').value=''; drawChips(); drawSug(); renderFech();
     }));
   }
-  $('#vincNome').addEventListener('change',e=>{ d.nome=nomeFmt(e.target.value); save(); renderFech(); });
+  $('#vincNome').addEventListener('change',e=>{ const anterior=d.nome; d.nome=nomeFmt(e.target.value); if(normName(anterior)!==normName(d.nome)) d.aliases=[...new Set([...(d.aliases||[]),anterior])]; save(); renderFech(); });
   $('#vincBusca').addEventListener('input',drawSug);
   $('#vincOk').addEventListener('click',()=>{ closeModal(); renderDrivers(); renderFech(); });
   drawChips(); drawSug();
 }
 
+// Pendências vêm das movimentações, inclusive de relatórios já importados.
+function motoristasSemVinculo(){
+  const nomes=new Map();
+  const add=(nome,empresa,cidade,qtd)=>{
+    if(!nome || findDriver(nome)) return;
+    const key=normName(nome);
+    let item=nomes.get(key);
+    if(!item){ item={nome,variacoes:[],empresas:new Set(),cidades:new Set(),qtd:0}; nomes.set(key,item); }
+    if(!item.variacoes.includes(nome)) item.variacoes.push(nome);
+    if(empresa) item.empresas.add(empresa); if(cidade) item.cidades.add(cidade);
+    item.qtd+=parseNum(qtd)||0;
+  };
+  S.entregas.forEach(e=>add(e.motorista,e.empresa,e.cidade,e.qtd));
+  S.extravios.forEach(e=>add(e.motorista,e.empresa,e.cidade,0));
+  return [...nomes.values()].sort((a,b)=>b.qtd-a.qtd || a.nome.localeCompare(b.nome));
+}
+function renderPendenciasMotoristas(){
+  const box=$('#driverPendencias'); if(!box) return;
+  const itens=motoristasSemVinculo();
+  if(!itens.length){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="panel" style="margin-bottom:16px"><h3>Identificar nomes dos relatórios (${itens.length})</h3><p class="panel-note">Estes nomes ainda não estão associados a um cadastro. Escolha o motorista correto ou crie um cadastro com o nome completo. As sugestões precisam de conferência. A lista inclui todos os períodos.</p><input class="fld sm" id="buscarPendente" placeholder="Buscar nome do relatório ou cidade"><div id="listaPendentes" style="max-height:360px;overflow:auto;margin-top:12px"></div></div>`;
+  const draw=()=>{
+    const q=norm($('#buscarPendente').value).replace(/ /g,'');
+    const list=itens.filter(i=>norm(i.nome+' '+[...i.cidades].join(' ')).replace(/ /g,'').includes(q));
+    $('#listaPendentes').innerHTML=list.map(i=>`<div style="padding:12px 0;border-bottom:1px solid var(--border)"><b>${esc(i.nome)}</b><div class="panel-note">${esc([...i.empresas].join(' / '))} · ${i.qtd} entregas · ${esc([...i.cidades].join(' / '))}</div><button class="btn primary sm" data-associar="${esc(i.nome)}">Identificar / vincular</button></div>`).join('') || '<p>Nenhum nome com essa busca.</p>';
+    $$('[data-associar]',box).forEach(b=>b.onclick=()=>openIdentificarMotorista(b.dataset.associar));
+  };
+  $('#buscarPendente').oninput=draw; draw();
+}
+function vincularNomeRelatorio(nome,id,novoNome){
+  const item=motoristasSemVinculo().find(i=>normName(i.nome)===normName(nome));
+  if(!item) return 'Este nome já foi vinculado. Atualize a lista.';
+  let alvo=S.drivers.find(d=>d.id===id);
+  const criar=!id;
+  if(criar){
+    if(!novoNome || !novoNome.trim()) return 'Preencha o nome completo do motorista.';
+    if(findDriver(novoNome)) return 'Já existe um cadastro com esse nome. Selecione o cadastro existente.';
+    alvo={id:uid(),nome:nomeFmt(novoNome),telefone:'',cidade:'',tarifa:null,cnpj:'',oxpay:false,aliases:[]};
+  }
+  if(!alvo) return 'Selecione um motorista cadastrado.';
+  const sufixos=new Set(item.variacoes.map(n=>'nm:'+normName(n)));
+  const destino='drv:'+alvo.id, migracoes=[];
+  // Não oculta ajustes/status já registrados ao trocar a identidade do fechamento.
+  for(const campo of ['ajustes','statusPag']) for(const key of Object.keys(S[campo]||{})){
+    const partes=key.split('\u0001'); if(!sufixos.has(partes[1])) continue;
+    const target=partes[0]+'\u0001'+destino;
+    if(Object.prototype.hasOwnProperty.call(S[campo],target)) return 'Há ajustes ou status nos dois fechamentos deste período. Revise esses lançamentos antes de vincular para evitar perder informações.';
+    migracoes.push({campo,key,target});
+  }
+  if(criar) S.drivers.push(alvo);
+  alvo.aliases=[...new Set([...(alvo.aliases||[]),...item.variacoes.filter(n=>normName(n)!==normName(alvo.nome))])];
+  migracoes.forEach(m=>{S[m.campo][m.target]=S[m.campo][m.key];delete S[m.campo][m.key];});
+  save(); return '';
+}
+function openIdentificarMotorista(nome){
+  const item=motoristasSemVinculo().find(i=>normName(i.nome)===normName(nome)); if(!item) return;
+  modal(`<h3>Identificar motorista</h3><p class="mh">Nome no relatório: <b>${esc(item.nome)}</b><br>${esc([...item.empresas].join(' / '))} · ${item.qtd} entregas · ${esc([...item.cidades].join(' / '))}</p><label class="lbl">Buscar cadastro por nome, telefone ou CNPJ</label><input class="fld" id="identBusca" placeholder="Digite uma parte do nome completo"><label class="lbl">Selecione o motorista correto (sugestões primeiro)</label><select class="fld" id="identAlvo" size="6" style="height:180px"></select><p class="panel-note" id="identInfo">O cadastro escolhido mantém sua tarifa, telefone, CNPJ e Oxpay. O nome do relatório vira uma variação vinculada, inclusive nas próximas importações.</p><button class="btn primary" id="identVincular">Vincular ao cadastro escolhido</button><hr style="margin:20px 0;border:0;border-top:1px solid var(--border)"><label class="lbl">Se ainda não existe cadastro, informe o nome completo</label><input class="fld" id="identNovoNome" value="${esc(nomeFmt(nome))}"><div class="modal-actions"><button class="btn ghost" id="identCancelar">Cancelar</button><button class="btn secondary" id="identCriar">Criar cadastro e vincular</button></div>`);
+  const ranked=S.drivers.map(d=>({d,score:Math.max(...[d.nome,...(d.aliases||[])].map(n=>nomeSimilar(normName(nome),normName(n))))})).sort((a,b)=>b.score-a.score || a.d.nome.localeCompare(b.d.nome));
+  const draw=()=>{
+    const q=norm($('#identBusca').value).replace(/ /g,'');
+    const list=ranked.filter(({d})=>norm([d.nome,...(d.aliases||[]),d.telefone,d.cnpj].join(' ')).replace(/ /g,'').includes(q));
+    $('#identAlvo').innerHTML='<option value="" selected>— escolha e confira o motorista —</option>'+list.map(({d,score})=>`<option value="${esc(d.id)}">${esc(d.nome)}${score>=0.85?' · nome semelhante':''} · ${esc(d.telefone||'sem telefone')} · ${esc(d.cidade||'sem cidade')} · ${d.oxpay?'Com Oxpay':'Sem Oxpay'}</option>`).join('');
+  };
+  const concluir=(id,novo)=>{
+    const erro=vincularNomeRelatorio(nome,id,novo); if(erro){toast(erro,'err');return;}
+    closeModal();renderDrivers();renderFech();toast('Motorista vinculado. Confira os valores recalculados com a tarifa do cadastro.','ok');
+  };
+  $('#identBusca').oninput=draw;
+  $('#identVincular').onclick=()=>{const id=$('#identAlvo').value;if(!id){toast('Escolha o motorista correto na lista','err');return;}concluir(id);};
+  $('#identCriar').onclick=()=>concluir('', $('#identNovoNome').value);
+  $('#identCancelar').onclick=closeModal;
+  draw();
+}
+
 function renderDrivers(){
+  renderPendenciasMotoristas();
   const q=norm($('#searchDriver').value);
   const qd=q.replace(/\D/g,'');
   $('#driverCount').textContent=S.drivers.length;
@@ -2790,7 +2876,7 @@ function renderDrivers(){
   const btnLimpar=$('#btnLimparFlt'); if(btnLimpar) btnLimpar.style.display = filtrando?'':'none';
 
   const list=S.drivers.filter(d=>{
-    if(q && !(norm(d.nome).includes(q) || (d.aliases||[]).some(a=>norm(a).includes(q)) || (qd && phoneDigits(d.telefone).includes(qd)))) return false;
+    if(q && !(norm(d.nome).replace(/ /g,'').includes(q.replace(/ /g,'')) || (d.aliases||[]).some(a=>norm(a).replace(/ /g,'').includes(q.replace(/ /g,''))) || (qd && phoneDigits(d.telefone).includes(qd)))) return false;
     if(fCid && norm(d.cidade||'')!==norm(fCid)) return false;
     if(fOg){ const og=origemMap[d.id]; if(!og || og.origem!==fOg) return false; }
     if(fTar==='propria' && !(d.tarifa!=null && d.tarifa!=='')) return false;
@@ -2823,7 +2909,7 @@ function renderDrivers(){
     $$('[data-k]',tr).forEach(inp=> inp.addEventListener('change',()=>{
       const key=inp.dataset.k;
       if(key==='tarifa') d.tarifa = inp.value.trim()===''?null:parseNum(inp.value);
-      else if(key==='nome') d.nome=nomeFmt(inp.value);
+      else if(key==='nome'){ const anterior=d.nome; d.nome=nomeFmt(inp.value); if(normName(anterior)!==normName(d.nome)) d.aliases=[...new Set([...(d.aliases||[]),anterior])]; }
       else if(key==='oxpay') d.oxpay=inp.checked;
       else if(key==='cnpj') d.cnpj=inp.value.trim();
       else d[key]=inp.value.trim();
