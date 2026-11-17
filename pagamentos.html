@@ -740,6 +740,7 @@ function migrarEstado(){
   if(mudou) save();
 }
 function save(){
+  fechSearchCache=null; driversSearchCache=null;
   try{
     localStorage.setItem(LS_KEY, JSON.stringify(packState(S)));
     if(typeof renderStorageInfo==='function') renderStorageInfo();
@@ -1045,7 +1046,31 @@ function waNumber(p){
 function limpaNomeAnjun(s){
   return (s||'').toString().replace(/[\s_-]*D\d{2,}\s*$/i,'').replace(/([a-zà-ÿ])([A-ZÀ-Ý])/g,'$1 $2').trim();
 }
+// Índice temporário por operação: nenhuma alteração de cadastro fica em cache.
+let driverLookupAtivo=null;
+var fechSearchCache=null, driversSearchCache=null;
+function comIndiceMotoristas(fn){
+  if(driverLookupAtivo) return fn();
+  const exact=new Map(), compact=new Map(), normalizados=new Map();
+  const add=(map,key,d)=>{ if(!key) return; if(!map.has(key)) map.set(key,d); else if(map.get(key)!==d) map.set(key,null); };
+  S.drivers.forEach(d=>[d.nome,...(d.aliases||[])].forEach(nome=>{
+    const n=normName(nome); add(exact,n,d); add(compact,n.replace(/ /g,''),d);
+  }));
+  driverLookupAtivo={exact,compact,normalizados};
+  try{return fn();}finally{driverLookupAtivo=null;}
+}
+function buscaComEspera(fn){
+  let timer;
+  return ()=>{clearTimeout(timer);timer=setTimeout(fn,120);};
+}
 function findDriver(nome){
+  if(driverLookupAtivo){
+    const idx=driverLookupAtivo;
+    if(idx.normalizados.has(nome)) return idx.normalizados.get(nome);
+    const n=normName(nome), c=n.replace(/ /g,'');
+    const d=idx.exact.has(n)?idx.exact.get(n):idx.compact.get(c);
+    idx.normalizados.set(nome,d||undefined); return d||undefined;
+  }
   const n=normName(nome), compact=n.replace(/ /g,'');
   if(!compact) return;
   const exact=S.drivers.filter(d=>[d.nome,...(d.aliases||[])].some(a=>normName(a)===n));
@@ -1172,7 +1197,8 @@ function tarifaEntrega(e, o){
 /* =========================================================================
    CÁLCULO DOS FECHAMENTOS
    ========================================================================= */
-function computeFechamentos(){
+function computeFechamentos(){ return comIndiceMotoristas(calcularFechamentos); }
+function calcularFechamentos(){
   const map = {}; // key normName -> obj
   function getDriver(nome){
     const d = findDriver(nome);
@@ -1290,8 +1316,10 @@ function computeFechamentos(){
 /* =========================================================================
    RENDER · FECHAMENTOS
    ========================================================================= */
-function renderFech(){
-  const data = computeFechamentos();
+function renderFech(opcoes={}){
+  const reutilizar=opcoes.searchOnly && fechSearchCache && fechSearchCache.periodo===(S.periodoSel||'');
+  const data=reutilizar?fechSearchCache.data:computeFechamentos();
+  fechSearchCache={periodo:S.periodoSel||'',data};
   const q = norm($('#searchFech').value);
   // valida o filtro de origem (se a origem sumiu, limpa)
   const origensPresentes = new Set(data.map(d=>d.origem).filter(Boolean));
@@ -2775,7 +2803,8 @@ function openVincular(id){
 }
 
 // Pendências vêm das movimentações, inclusive de relatórios já importados.
-function motoristasSemVinculo(){
+function motoristasSemVinculo(){ return comIndiceMotoristas(listarMotoristasSemVinculo); }
+function listarMotoristasSemVinculo(){
   const nomes=new Map();
   const add=(nome,empresa,cidade,qtd)=>{
     if(!nome || findDriver(nome)) return;
@@ -2848,14 +2877,18 @@ function openIdentificarMotorista(nome){
   draw();
 }
 
-function renderDrivers(){
-  renderPendenciasMotoristas();
+function renderDrivers(opcoes={}){
+  const reutilizar=opcoes.searchOnly && driversSearchCache && driversSearchCache.periodo===(S.periodoSel||'');
+  if(!reutilizar) renderPendenciasMotoristas();
   const q=norm($('#searchDriver').value);
   const qd=q.replace(/\D/g,'');
   $('#driverCount').textContent=S.drivers.length;
   // lookup de origem por motorista (a partir das entregas importadas)
-  const origemMap={};
-  computeFechamentos().forEach(f=>{ if(f.origem){ const d=findDriver(f.nome); if(d) origemMap[d.id]={origem:f.origem,pct:f.origemPct,regioes:f.regioes}; } });
+  const origemMap=reutilizar?driversSearchCache.origemMap:{};
+  if(!reutilizar){
+    comIndiceMotoristas(()=>computeFechamentos().forEach(f=>{ if(f.origem){ const d=findDriver(f.nome); if(d) origemMap[d.id]={origem:f.origem,pct:f.origemPct,regioes:f.regioes}; } }));
+    driversSearchCache={periodo:S.periodoSel||'',origemMap};
+  }
 
   // popula selects de filtro (cidade padrão + origem detectada), preservando a seleção atual
   const selCid=$('#fltCidade'), selOg=$('#fltOrigem'), selTar=$('#fltTarifa');
@@ -3309,7 +3342,7 @@ function bind(){
     stSel.value=S.filtroStatus||'';
     stSel.addEventListener('change',e=>{ S.filtroStatus=e.target.value; save(); renderFech(); });
   }
-  $('#searchFech').addEventListener('input',renderFech);
+  $('#searchFech').addEventListener('input',buscaComEspera(()=>renderFech({searchOnly:true})));
   $('#btnRecalc').addEventListener('click',()=>{ renderFech(); toast('Recalculado','ok'); });
   $('#btnExportFech').addEventListener('click',exportFech);
   // --- sincronização de extravios (Google Sheets) ---
@@ -3332,7 +3365,7 @@ function bind(){
   if($('#fileImportData')) $('#fileImportData').addEventListener('change',e=>{ const f=e.target.files[0]; if(f) importData(f); e.target.value=''; });
   if($('#btnBackupAntesLimpar')) $('#btnBackupAntesLimpar').addEventListener('click',exportData);
   if($('#btnLimparMov')) $('#btnLimparMov').addEventListener('click',limparMovimentacoes);
-  $('#searchDriver').addEventListener('input',renderDrivers);
+  $('#searchDriver').addEventListener('input',buscaComEspera(()=>renderDrivers({searchOnly:true})));
   ['fltCidade','fltOrigem','fltTarifa'].forEach(id=>{ const e=$('#'+id); if(e) e.addEventListener('change',renderDrivers); });
   if($('#btnLimparFlt')) $('#btnLimparFlt').addEventListener('click',()=>{
     $('#searchDriver').value=''; ['fltCidade','fltOrigem','fltTarifa'].forEach(id=>{ const e=$('#'+id); if(e) e.value=''; });
